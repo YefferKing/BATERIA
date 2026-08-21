@@ -3914,59 +3914,61 @@ async function renderExecutiveDashboard() {
       }).join('');
     }
 
-    // 10. Tabla Territorial Consolidada por Municipio (Ordenada: Primero Fase 1 y luego Fase 2)
+    // 10. Tabla Territorial Consolidada por Municipio (Ordenada: Primero Fase 1 y luego Fase 2 - San Calixto separado por fase)
     const tbody = document.getElementById('dash-municipios-tbody');
     if (tbody) {
       if (sortedMuns.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Sin datos de municipios</td></tr>`;
       } else {
-        // Ordenar primero todos los de Fase 1, luego los mixtos, y luego los de Fase 2
-        const tableF1Only = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total === 0).sort((a, b) => b.terminadas - a.terminadas || a.name.localeCompare(b.name, 'es'));
-        const tableBoth = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
-        const tableF2Only = sortedMuns.filter(m => m.f2.total > 0 && m.f1.total === 0).sort((a, b) => b.terminadas - a.terminadas || a.name.localeCompare(b.name, 'es'));
-        const tableMunsOrdered = [...tableF1Only, ...tableBoth, ...tableF2Only];
+        // Generar elementos separados para la tabla: Bloque Fase 1 y Bloque Fase 2 (San Calixto repetido por fase)
+        const tableF1Items = sortedMuns
+          .filter(m => m.f1.total > 0)
+          .sort((a, b) => b.f1.terminadas - a.f1.terminadas || a.name.localeCompare(b.name, 'es'))
+          .map(m => ({
+            name: m.name === 'SAN CALIXTO' ? 'SAN CALIXTO (FASE 1)' : m.name,
+            fase: 1,
+            total: m.f1.total,
+            sinIniciar: m.f1.sinIniciar,
+            ejecucion: m.f1.ejecucion,
+            terminadas: m.f1.terminadas,
+            avg: m.f1.avg
+          }));
 
-        tbody.innerHTML = tableMunsOrdered.map((m) => {
-          const hasF1 = m.f1.total > 0;
-          const hasF2 = m.f2.total > 0;
+        const tableF2Items = sortedMuns
+          .filter(m => m.f2.total > 0)
+          .sort((a, b) => b.f2.terminadas - a.f2.terminadas || a.name.localeCompare(b.name, 'es'))
+          .map(m => ({
+            name: m.name === 'SAN CALIXTO' ? 'SAN CALIXTO (FASE 2)' : m.name,
+            fase: 2,
+            total: m.f2.total,
+            sinIniciar: m.f2.sinIniciar,
+            ejecucion: m.f2.ejecucion,
+            terminadas: m.f2.terminadas,
+            avg: m.f2.avg
+          }));
 
-          const pctSin = m.total > 0 ? ((m.sinIniciar / m.total) * 100).toFixed(1) : '0.0';
-          const pctEjec = m.total > 0 ? ((m.ejecucion / m.total) * 100).toFixed(1) : '0.0';
-          const pctTerm = m.total > 0 ? ((m.terminadas / m.total) * 100).toFixed(1) : '0.0';
+        const allTableItems = [...tableF1Items, ...tableF2Items];
 
-          let faseBadgeHtml = '';
-          if (hasF1 && hasF2) {
-            faseBadgeHtml = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.68rem; margin-right:3px;">🔵 F1</span><span class="badge" style="background:#f3e8ff; color:#7c3aed; font-size:0.68rem;">🟣 F2</span>';
-          } else if (hasF1) {
-            faseBadgeHtml = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.68rem;">🔵 FASE 1</span>';
-          } else {
-            faseBadgeHtml = '<span class="badge" style="background:#f3e8ff; color:#7c3aed; font-size:0.68rem;">🟣 FASE 2</span>';
-          }
+        tbody.innerHTML = allTableItems.map((item) => {
+          const pctSin = item.total > 0 ? ((item.sinIniciar / item.total) * 100).toFixed(1) : '0.0';
+          const pctEjec = item.total > 0 ? ((item.ejecucion / item.total) * 100).toFixed(1) : '0.0';
+          const pctTerm = item.total > 0 ? ((item.terminadas / item.total) * 100).toFixed(1) : '0.0';
 
-          let faseSubtotalHtml = '';
-          if (hasF1 && hasF2) {
-            faseSubtotalHtml = `<span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.total}</span> | <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.total}</span>`;
-          } else if (hasF1) {
-            faseSubtotalHtml = `<span style="color: #0284c7; font-weight: 600;">🔵 ${m.f1.total} Baterías</span>`;
-          } else {
-            faseSubtotalHtml = `<span style="color: #8b5cf6; font-weight: 600;">🟣 ${m.f2.total} Baterías</span>`;
-          }
+          const isF1 = item.fase === 1;
+          const faseBadgeHtml = isF1
+            ? '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.68rem; font-weight:700;">🔵 FASE 1</span>'
+            : '<span class="badge" style="background:#f3e8ff; color:#7c3aed; font-size:0.68rem; font-weight:700;">🟣 FASE 2</span>';
 
-          let faseProgressSubHtml = '';
-          if (hasF1 && hasF2) {
-            faseProgressSubHtml = `<span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.avg.toFixed(1)}%</span> • <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.avg.toFixed(1)}%</span>`;
-          } else if (hasF1) {
-            faseProgressSubHtml = `<span style="color: #0284c7; font-weight: 600;">🔵 F1: ${m.f1.avg.toFixed(1)}%</span>`;
-          } else {
-            faseProgressSubHtml = `<span style="color: #8b5cf6; font-weight: 600;">🟣 F2: ${m.f2.avg.toFixed(1)}%</span>`;
-          }
+          const faseSubtotalHtml = isF1
+            ? `<span style="color: #0284c7; font-weight: 600;">🔵 ${item.total} Baterías</span>`
+            : `<span style="color: #8b5cf6; font-weight: 600;">🟣 ${item.total} Baterías</span>`;
 
           let generalBadge = 'badge-status-sin-iniciar';
           let generalLabel = '⚪ Sin Iniciar';
-          if (m.avg >= 99.9 || m.terminadas === m.total) {
+          if (item.avg >= 99.9 || item.terminadas === item.total) {
             generalBadge = 'badge-status-terminado';
             generalLabel = '🟢 Terminado';
-          } else if (m.avg > 0 || m.ejecucion > 0 || m.terminadas > 0) {
+          } else if (item.avg > 0 || item.ejecucion > 0 || item.terminadas > 0) {
             generalBadge = 'badge-status-ejecucion';
             generalLabel = '🟠 En Ejecución';
           }
@@ -3975,37 +3977,37 @@ async function renderExecutiveDashboard() {
             <tr>
               <td>
                 <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                  <strong style="color: var(--text-primary); font-size: 0.9rem;">🏛️ ${escapeHtml(m.name)}</strong>
+                  <strong style="color: var(--text-primary); font-size: 0.9rem;">🏛️ ${escapeHtml(item.name)}</strong>
                   ${faseBadgeHtml}
                 </div>
               </td>
               <td style="text-align: center;">
-                <span style="font-weight: 700;">${m.total.toLocaleString('es-CO')}</span>
+                <span style="font-weight: 700;">${item.total.toLocaleString('es-CO')}</span>
                 <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 1px;">
                   ${faseSubtotalHtml}
                 </div>
               </td>
               <td style="text-align: center;">
-                <span style="color: #64748b; font-weight: 600;">${m.sinIniciar}</span>
+                <span style="color: #64748b; font-weight: 600;">${item.sinIniciar}</span>
                 <span style="font-size: 0.75rem; color: var(--text-muted);">(${pctSin}%)</span>
               </td>
               <td style="text-align: center;">
-                <span style="color: #ea580c; font-weight: 700;">${m.ejecucion}</span>
+                <span style="color: #ea580c; font-weight: 700;">${item.ejecucion}</span>
                 <span style="font-size: 0.75rem; color: var(--text-muted);">(${pctEjec}%)</span>
               </td>
               <td style="text-align: center;">
-                <span style="color: #059669; font-weight: 700;">${m.terminadas}</span>
+                <span style="color: #059669; font-weight: 700;">${item.terminadas}</span>
                 <span style="font-size: 0.75rem; color: var(--text-muted);">(${pctTerm}%)</span>
               </td>
               <td style="width: 175px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: bold; margin-bottom: 2px;">
-                  <span>${m.avg.toFixed(1)}%</span>
-                  <span style="font-size: 0.72rem; font-weight: normal; color: var(--text-muted);">
-                    ${faseProgressSubHtml}
+                  <span>${item.avg.toFixed(1)}%</span>
+                  <span style="font-size: 0.72rem; font-weight: 600; color: ${isF1 ? '#0284c7' : '#8b5cf6'};">
+                    ${isF1 ? '🔵 F1' : '🟣 F2'}
                   </span>
                 </div>
                 <div style="height: 6px; background: var(--bg-subtle); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color);">
-                  <div style="height: 100%; width: ${m.avg}%; background: ${m.avg >= 99.9 ? '#059669' : m.avg > 0 ? '#ea580c' : '#64748b'};"></div>
+                  <div style="height: 100%; width: ${item.avg}%; background: ${item.avg >= 99.9 ? '#059669' : item.avg > 0 ? '#ea580c' : '#64748b'};"></div>
                 </div>
               </td>
               <td style="text-align: center;">
