@@ -54,7 +54,9 @@ const visibleBarLabelsPlugin = {
         ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
 
         let labelText = '';
-        if (typeof val === 'number') {
+        if (dataset.customLabels && dataset.customLabels[index]) {
+          labelText = dataset.customLabels[index];
+        } else if (typeof val === 'number') {
           labelText = (dataset.label && dataset.label.includes('%')) ? `${val.toFixed(1)}%` : `${val}`;
         } else {
           labelText = String(val);
@@ -3683,7 +3685,7 @@ async function renderExecutiveDashboard() {
       renderProgressBarsReportToCanvas(canvasBalance, fase1Muns, fase2Muns, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global);
     }
 
-    // 9. Gráfica 3: Doble Barra por Municipio (Comparativo Fase 1 vs Fase 2)
+    // 9. Gráfica 3: Doble Barra por Municipio (Comparativo Fase 1 vs Fase 2 - Primero Fase 1 y luego Fase 2)
     const canvasStacked = document.getElementById('chart-municipios-stacked');
     if (canvasStacked && typeof Chart !== 'undefined') {
       const ctxStacked = canvasStacked.getContext('2d');
@@ -3692,9 +3694,19 @@ async function renderExecutiveDashboard() {
       const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
       const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
-      const labels = sortedMuns.map((m) => m.name);
-      const dataF1 = sortedMuns.map((m) => m.f1.total);
-      const dataF2 = sortedMuns.map((m) => m.f2.total);
+      // Ordenar primero todos los de Fase 1, luego los que tienen ambas fases, y finalmente los de Fase 2
+      const f1Only = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total === 0).sort((a, b) => b.f1.total - a.f1.total || a.name.localeCompare(b.name, 'es'));
+      const fBoth = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+      const f2Only = sortedMuns.filter(m => m.f2.total > 0 && m.f1.total === 0).sort((a, b) => b.f2.total - a.f2.total || a.name.localeCompare(b.name, 'es'));
+      const stackedMunsOrdered = [...f1Only, ...fBoth, ...f2Only];
+
+      const labels = stackedMunsOrdered.map((m) => m.name);
+      const dataF1 = stackedMunsOrdered.map((m) => m.f1.total > 0 ? m.f1.total : null);
+      const dataF2 = stackedMunsOrdered.map((m) => m.f2.total > 0 ? m.f2.total : null);
+
+      // Etiquetas visibles directamente sobre las barras: Cantidad y Porcentaje de Avance
+      const customLabelsF1 = stackedMunsOrdered.map((m) => m.f1.total > 0 ? `${m.f1.total} (${m.f1.avg.toFixed(1)}%)` : '');
+      const customLabelsF2 = stackedMunsOrdered.map((m) => m.f2.total > 0 ? `${m.f2.total} (${m.f2.avg.toFixed(1)}%)` : '');
 
       chartMunicipiosStacked = new Chart(ctxStacked, {
         type: 'bar',
@@ -3703,14 +3715,16 @@ async function renderExecutiveDashboard() {
           labels,
           datasets: [
             {
-              label: '🔵 Fase 1 (Baterías)',
+              label: '🔵 Fase 1 (Baterías & % Avance)',
               data: dataF1,
+              customLabels: customLabelsF1,
               backgroundColor: '#0284c7',
               borderRadius: 4
             },
             {
-              label: '🟣 Fase 2 (Baterías)',
+              label: '🟣 Fase 2 (Baterías & % Avance)',
               data: dataF2,
+              customLabels: customLabelsF2,
               backgroundColor: '#8b5cf6',
               borderRadius: 4
             }
@@ -3721,7 +3735,7 @@ async function renderExecutiveDashboard() {
           maintainAspectRatio: false,
           scales: {
             x: {
-              ticks: { font: { size: 11, weight: '600' }, color: textColor },
+              ticks: { font: { size: 10, weight: '600' }, color: textColor, maxRotation: 45, minRotation: 0 },
               grid: { display: false }
             },
             y: {
@@ -3738,15 +3752,16 @@ async function renderExecutiveDashboard() {
             tooltip: {
               callbacks: {
                 label: (ctx) => {
-                  const m = sortedMuns[ctx.dataIndex];
+                  const m = stackedMunsOrdered[ctx.dataIndex];
                   const faseInfo = ctx.datasetIndex === 0 ? m.f1 : m.f2;
                   const labelPrefix = ctx.datasetIndex === 0 ? '🔵 Fase 1' : '🟣 Fase 2';
+                  if (faseInfo.total === 0) return null;
                   return [
                     ` ${labelPrefix}: ${faseInfo.total} baterías`,
+                    `   📈 Avance Promedio: ${faseInfo.avg.toFixed(1)}%`,
                     `   🟢 Terminadas: ${faseInfo.terminadas}`,
                     `   🟠 En Ejecución: ${faseInfo.ejecucion}`,
-                    `   ⚪ Sin Iniciar: ${faseInfo.sinIniciar}`,
-                    `   📈 Avance: ${faseInfo.avg.toFixed(1)}%`
+                    `   ⚪ Sin Iniciar: ${faseInfo.sinIniciar}`
                   ];
                 }
               }
