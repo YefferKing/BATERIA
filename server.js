@@ -134,29 +134,15 @@ async function initMySQL() {
       (2, 10);
     `);
 
-    // 11. Sembrar 1 Administrador y 20 Inspectores
+    // 11. Sembrar Administrador Principal si la tabla está vacía
     const [userCount] = await pool.query('SELECT COUNT(*) as count FROM usuarios');
     if (userCount[0].count === 0) {
-      console.log('Sembrando Administrador y 20 Inspectores en tabla usuarios...');
-      const seedUsers = [
+      console.log('Sembrando Administrador Principal en tabla usuarios...');
+      await pool.query(
+        'INSERT INTO usuarios (nombre, usuario, documento, pin, rol_id, cargo, activo) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ['Administrador Principal', 'admin', '00000000', '1234', 1, 'Super Administrador', 1]
-      ];
-
-      for (let i = 1; i <= 20; i++) {
-        const numPadded = String(i).padStart(2, '0');
-        seedUsers.push([
-          `Inspector ${numPadded}`,
-          `inspector${numPadded}`,
-          `100000${numPadded}`,
-          `11${numPadded}`,
-          2, // rol_id: 2 (inspector)
-          `Inspector de Campo #${numPadded}`,
-          1
-        ]);
-      }
-
-      await pool.query('INSERT INTO usuarios (nombre, usuario, documento, pin, rol_id, cargo, activo) VALUES ?', [seedUsers]);
-      console.log('✓ 21 Usuarios vinculados a sus roles correspondientes en MySQL.');
+      );
+      console.log('✓ Usuario Administrador Principal creado en MySQL.');
     }
 
     // 12. Crear tablas de Municipios, Veredas y Beneficiarios si no existen
