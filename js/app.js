@@ -40,6 +40,8 @@ const visibleBarLabelsPlugin = {
     const { ctx } = chart;
     const isHorizontal = chart.config.options && chart.config.options.indexAxis === 'y';
     const isStacked = chart.config.options && chart.config.options.scales && chart.config.options.scales.x && chart.config.options.scales.x.stacked;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const outsideTextColor = isDark ? '#f8fafc' : '#0f172a';
 
     chart.data.datasets.forEach((dataset, datasetIndex) => {
       const meta = chart.getDatasetMeta(datasetIndex);
@@ -55,7 +57,6 @@ const visibleBarLabelsPlugin = {
         if (dataset.customLabels && dataset.customLabels[index] !== undefined && dataset.customLabels[index] !== '') {
           labelText = String(dataset.customLabels[index]);
         } else if (typeof val === 'number') {
-          // Solo mostrar la cantidad exacta como número entero
           labelText = String(Math.round(val));
         } else {
           labelText = String(val);
@@ -69,19 +70,19 @@ const visibleBarLabelsPlugin = {
               ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'middle';
-              ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
               ctx.shadowBlur = 4;
               ctx.fillText(labelText, element.x - (width / 2), element.y);
             }
           } else {
-            ctx.fillStyle = '#0f172a';
+            ctx.fillStyle = outsideTextColor;
             ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
             ctx.textAlign = 'left';
             ctx.textBaseline = 'middle';
             ctx.fillText(labelText, element.x + 6, element.y);
           }
         } else {
-          ctx.fillStyle = '#0f172a';
+          ctx.fillStyle = outsideTextColor;
           ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
@@ -138,6 +139,15 @@ window.applyTheme = function (theme, showNotice = false) {
   const dropdownText = document.getElementById('dropdown-theme-text');
   if (dropdownIcon) dropdownIcon.textContent = isDark ? '☀️' : '🌙';
   if (dropdownText) dropdownText.textContent = isDark ? 'Modo Claro' : 'Modo Oscuro';
+  // Re-renderizar gráficas al cambiar de tema
+  setTimeout(() => {
+    if (typeof renderExecutiveDashboard === 'function') {
+      try { renderExecutiveDashboard(); } catch(e) {}
+    }
+    if (typeof renderVeredasMunicipioChart === 'function') {
+      try { renderVeredasMunicipioChart(); } catch(e) {}
+    }
+  }, 100);
 
   // Actualizar botón en el header durante la pantalla de login
   const headerLoginIcon = document.getElementById('header-login-theme-icon');
@@ -2633,12 +2643,12 @@ window.copyChartImage = async function (canvasId, chartTitle = 'Gráfica') {
     return;
   }
 
-  // Canvas temporal con fondo blanco de alta nitidez para WhatsApp / Word / PowerPoint
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = canvas.width;
   tempCanvas.height = canvas.height;
   const tempCtx = tempCanvas.getContext('2d');
-  tempCtx.fillStyle = '#ffffff';
+  tempCtx.fillStyle = isDark ? '#0f172a' : '#ffffff';
   tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
   tempCtx.drawImage(canvas, 0, 0);
 
@@ -2666,11 +2676,12 @@ window.downloadChartImage = function (canvasId, filename = 'grafica') {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
 
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
   const tempCanvas = document.createElement('canvas');
   tempCanvas.width = canvas.width;
   tempCanvas.height = canvas.height;
   const tempCtx = tempCanvas.getContext('2d');
-  tempCtx.fillStyle = '#ffffff';
+  tempCtx.fillStyle = isDark ? '#0f172a' : '#ffffff';
   tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
   tempCtx.drawImage(canvas, 0, 0);
 
@@ -3559,7 +3570,7 @@ async function renderExecutiveDashboard() {
       const ctxDonut = canvasDonut.getContext('2d');
       if (chartEstadosDonut) chartEstadosDonut.destroy();
       const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
-      const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
+      const textColor = isDarkTheme ? '#f8fafc' : '#0f172a';
       
       const pctSin = totalBeneficiarios > 0 ? ((globalSinIniciar / totalBeneficiarios) * 100).toFixed(1) : '0.0';
       const pctEjec = totalBeneficiarios > 0 ? ((globalEjecucion / totalBeneficiarios) * 100).toFixed(1) : '0.0';
@@ -4803,13 +4814,13 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
           x: {
             stacked: true,
             beginAtZero: true,
-            ticks: { font: { size: 11, weight: '700' }, color: '#0f172a', precision: 0 },
-            grid: { color: 'rgba(0, 0, 0, 0.08)' },
-            title: { display: true, text: 'Cantidad de Baterías Sanitarias', color: '#0f172a', font: { size: 12, weight: '800' } }
+            ticks: { font: { size: 11, weight: '700' }, color: textColor, precision: 0 },
+            grid: { color: gridColor },
+            title: { display: true, text: 'Cantidad de Baterías Sanitarias', color: textColor, font: { size: 12, weight: '700' } }
           },
           y: {
             stacked: true,
-            ticks: { font: { size: 11, weight: '700' }, color: '#0f172a' },
+            ticks: { font: { size: 11, weight: '700' }, color: textColor },
             grid: { display: false }
           }
         },
@@ -4817,7 +4828,7 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
           legend: {
             display: true,
             position: 'top',
-            labels: { boxWidth: 14, font: { size: 12, weight: '800' }, color: '#0f172a' }
+            labels: { boxWidth: 14, font: { size: 12, weight: '700' }, color: textColor }
           },
           tooltip: {
             callbacks: {
