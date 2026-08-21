@@ -39,6 +39,7 @@ const visibleBarLabelsPlugin = {
   afterDatasetsDraw(chart) {
     const { ctx } = chart;
     const isHorizontal = chart.config.options && chart.config.options.indexAxis === 'y';
+    const isStacked = chart.config.options && chart.config.options.scales && chart.config.options.scales.x && chart.config.options.scales.x.stacked;
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
 
     chart.data.datasets.forEach((dataset, datasetIndex) => {
@@ -50,8 +51,6 @@ const visibleBarLabelsPlugin = {
         if (val === null || val === undefined || val === 0) return;
 
         ctx.save();
-        ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
-        ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
 
         let labelText = '';
         if (dataset.customLabels && dataset.customLabels[index]) {
@@ -63,10 +62,27 @@ const visibleBarLabelsPlugin = {
         }
 
         if (isHorizontal) {
-          ctx.textAlign = 'left';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(labelText, element.x + 5, element.y);
+          if (isStacked) {
+            const width = Math.abs(element.width) || 0;
+            if (width >= 12) {
+              ctx.fillStyle = '#ffffff';
+              ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+              ctx.shadowBlur = 3;
+              ctx.fillText(labelText, element.x - (width / 2), element.y);
+            }
+          } else {
+            ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+            ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(labelText, element.x + 5, element.y);
+          }
         } else {
+          ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+          ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'bottom';
           ctx.fillText(labelText, element.x, element.y - 2);
@@ -4749,23 +4765,35 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
     const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
     const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
-    const dynamicHeight = Math.max(260, veredasList.length * 32);
+    const dynamicHeight = Math.max(260, veredasList.length * 36);
     if (wrapper) wrapper.style.height = `${dynamicHeight}px`;
 
-    const labels = veredasList.map((v) => `${v.nombre} (${v.total} bat.)`);
-    const avgs = veredasList.map((v) => parseFloat(v.avg.toFixed(1)));
-    const bgColors = veredasList.map((v) => v.avg >= 99.9 ? '#059669' : v.avg > 0 ? '#ea580c' : '#94a3b8');
+    const labels = veredasList.map((v) => `${v.nombre} (${v.total} bat. • ${v.avg.toFixed(1)}% Avance)`);
 
     chartReportVeredasMun = new Chart(ctx, { plugins: [visibleBarLabelsPlugin],
       type: 'bar',
       data: {
         labels,
-        datasets: [{
-          label: '% Avance Promedio',
-          data: avgs,
-          backgroundColor: bgColors,
-          borderRadius: 4
-        }]
+        datasets: [
+          {
+            label: '🟢 Terminadas (100%)',
+            data: veredasList.map(v => v.terminadas),
+            backgroundColor: '#059669',
+            borderRadius: 2
+          },
+          {
+            label: '🟠 En Ejecución',
+            data: veredasList.map(v => v.en_ejecucion),
+            backgroundColor: '#ea580c',
+            borderRadius: 2
+          },
+          {
+            label: '⚪ Sin Iniciar',
+            data: veredasList.map(v => v.sin_iniciar),
+            backgroundColor: '#94a3b8',
+            borderRadius: 2
+          }
+        ]
       },
       options: {
         indexAxis: 'y',
@@ -4773,28 +4801,42 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
         maintainAspectRatio: false,
         scales: {
           x: {
-            max: 100,
-            min: 0,
-            ticks: { callback: (val) => val + '%', font: { size: 10 }, color: textColor },
-            grid: { color: gridColor }
+            stacked: true,
+            beginAtZero: true,
+            ticks: { font: { size: 10, weight: '600' }, color: textColor, precision: 0 },
+            grid: { color: gridColor },
+            title: { display: true, text: 'Cantidad de Baterías Sanitarias', color: textColor, font: { size: 11, weight: '600' } }
           },
           y: {
+            stacked: true,
             ticks: { font: { size: 11, weight: '600' }, color: textColor },
             grid: { display: false }
           }
         },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { boxWidth: 12, font: { size: 11, weight: '700' }, color: textColor }
+          },
           tooltip: {
             callbacks: {
               label: (ctx) => {
                 const idx = ctx.dataIndex;
                 const v = veredasList[idx];
+                const dsLabel = ctx.dataset.label;
+                const count = ctx.parsed.x;
+                const pct = v.total > 0 ? ((count / v.total) * 100).toFixed(1) : 0;
+                return ` ${dsLabel}: ${count} (${pct}%)`;
+              },
+              afterBody: (tooltipItems) => {
+                if (!tooltipItems.length) return '';
+                const v = veredasList[tooltipItems[0].dataIndex];
                 return [
-                  ` % Avance Promedio: ${ctx.parsed.x}%`,
-                  ` Total Baterías: ${v.total}`,
-                  ` Terminadas: ${v.terminadas} | En Ejecución: ${v.en_ejecucion} | Sin Iniciar: ${v.sin_iniciar}`,
-                  ` Inspector(es): ${v.inspectoresArr.join(', ') || 'Sin Asignar'}`
+                  `-------------------`,
+                  `📦 Total Vereda: ${v.total} baterías`,
+                  `📈 Avance Promedio: ${v.avg.toFixed(1)}%`,
+                  `👷 Inspector: ${v.inspectoresArr.join(', ') || 'Sin Asignar'}`
                 ];
               }
             }
