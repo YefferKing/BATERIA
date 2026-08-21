@@ -2805,8 +2805,10 @@ async function renderExecutiveDashboard() {
         progressBarsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay datos registrados aún.</div>';
       } else {
         progressBarsContainer.innerHTML = sortedMuns.map(m => {
-          const pctF1 = m.f1.total > 0 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
-          const pctF2 = m.f2.total > 0 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
+          const hasF1 = m.f1.total > 0;
+          const hasF2 = m.f2.total > 0;
+          const pctF1 = hasF1 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
+          const pctF2 = hasF2 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
           const pctTotal = m.total > 0 ? ((m.terminadas / m.total) * 100).toFixed(1) : '0.0';
 
           return `
@@ -2818,7 +2820,8 @@ async function renderExecutiveDashboard() {
                 </span>
               </div>
               <div style="display: flex; flex-direction: column; gap: 0.35rem;">
-                <!-- Fase 1 -->
+                <!-- Fase 1 (Solo si el municipio tiene baterías en Fase 1) -->
+                ${hasF1 ? `
                 <div>
                   <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
                     <span style="font-weight: 600; color: #0284c7;">🔵 Fase 1:</span>
@@ -2827,8 +2830,9 @@ async function renderExecutiveDashboard() {
                   <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
                     <div style="height: 100%; width: ${pctF1}%; background: #0284c7; border-radius: 4px; transition: width 0.4s ease;"></div>
                   </div>
-                </div>
-                <!-- Fase 2 -->
+                </div>` : ''}
+                <!-- Fase 2 (Solo si el municipio tiene baterías en Fase 2) -->
+                ${hasF2 ? `
                 <div>
                   <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
                     <span style="font-weight: 600; color: #8b5cf6;">🟣 Fase 2:</span>
@@ -2837,7 +2841,7 @@ async function renderExecutiveDashboard() {
                   <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
                     <div style="height: 100%; width: ${pctF2}%; background: #8b5cf6; border-radius: 4px; transition: width 0.4s ease;"></div>
                   </div>
-                </div>
+                </div>` : ''}
               </div>
             </div>
           `;
@@ -2854,9 +2858,9 @@ async function renderExecutiveDashboard() {
       const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
       const labels = sortedMuns.map((m) => m.name);
-      // SOLO TENER EN CUENTA LAS TERMINADAS
-      const dataAvgsF1 = sortedMuns.map((m) => m.f1.total > 0 ? parseFloat(((m.f1.terminadas / m.f1.total) * 100).toFixed(2)) : 0);
-      const dataAvgsF2 = sortedMuns.map((m) => m.f2.total > 0 ? parseFloat(((m.f2.terminadas / m.f2.total) * 100).toFixed(2)) : 0);
+      // SOLO TENER EN CUENTA LAS TERMINADAS Y OCULTAR SI EL MUNICIPIO NO TIENE BATERÍAS EN ESA FASE (null)
+      const dataAvgsF1 = sortedMuns.map((m) => m.f1.total > 0 ? parseFloat(((m.f1.terminadas / m.f1.total) * 100).toFixed(2)) : null);
+      const dataAvgsF2 = sortedMuns.map((m) => m.f2.total > 0 ? parseFloat(((m.f2.terminadas / m.f2.total) * 100).toFixed(2)) : null);
 
       chartBalanceMunicipios = new Chart(ctxBalance, {
         type: 'bar',
@@ -2903,10 +2907,12 @@ async function renderExecutiveDashboard() {
                 label: (ctx) => {
                   const m = sortedMuns[ctx.dataIndex];
                   if (ctx.datasetIndex === 0) {
-                    const pct = m.f1.total > 0 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
+                    if (m.f1.total === 0) return null;
+                    const pct = ((m.f1.terminadas / m.f1.total) * 100).toFixed(1);
                     return ` 🔵 Fase 1: ${m.f1.terminadas} de ${m.f1.total} terminadas (${pct}%)`;
                   } else {
-                    const pct = m.f2.total > 0 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
+                    if (m.f2.total === 0) return null;
+                    const pct = ((m.f2.terminadas / m.f2.total) * 100).toFixed(1);
                     return ` 🟣 Fase 2: ${m.f2.terminadas} de ${m.f2.total} terminadas (${pct}%)`;
                   }
                 }
