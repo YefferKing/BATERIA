@@ -1,3 +1,80 @@
+
+/* ==========================================================================
+   PLUGINS DE ETIQUETAS DE PORCENTAJE VISIBLES PARA CHART.JS
+   ========================================================================== */
+const visibleDonutPercentagePlugin = {
+  id: 'visibleDonutPercentagePlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx, data } = chart;
+    const dataset = data.datasets[0];
+    if (!dataset) return;
+    const total = dataset.data.reduce((a, b) => a + (Number(b) || 0), 0);
+    if (total === 0) return;
+
+    chart.getDatasetMeta(0).data.forEach((element, index) => {
+      const val = Number(dataset.data[index]) || 0;
+      if (val <= 0) return;
+      const pctVal = ((val / total) * 100);
+      const pctStr = pctVal.toFixed(1) + '%';
+
+      // Posición del centroide del arco
+      const pos = element.tooltipPosition();
+      if (!pos || isNaN(pos.x) || isNaN(pos.y)) return;
+
+      ctx.save();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+      ctx.shadowBlur = 4;
+      ctx.fillText(pctStr, pos.x, pos.y);
+      ctx.restore();
+    });
+  }
+};
+
+const visibleBarLabelsPlugin = {
+  id: 'visibleBarLabelsPlugin',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    const isHorizontal = chart.config.options && chart.config.options.indexAxis === 'y';
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      if (!meta || !meta.visible) return;
+
+      meta.data.forEach((element, index) => {
+        const val = dataset.data[index];
+        if (val === null || val === undefined || val === 0) return;
+
+        ctx.save();
+        ctx.fillStyle = isDark ? '#f1f5f9' : '#0f172a';
+        ctx.font = 'bold 10px "Inter", "Segoe UI", sans-serif';
+
+        let labelText = '';
+        if (typeof val === 'number') {
+          labelText = (dataset.label && dataset.label.includes('%')) ? `${val.toFixed(1)}%` : `${val}`;
+        } else {
+          labelText = String(val);
+        }
+
+        if (isHorizontal) {
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(labelText, element.x + 5, element.y);
+        } else {
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.fillText(labelText, element.x, element.y - 2);
+        }
+        ctx.restore();
+      });
+    });
+  }
+};
+
 /**
  * CONTROLADOR PRINCIPAL DE LA APLICACIÓN
  * Autenticación Offline, Control de Roles/Permisos y Gestión con MySQL.
@@ -3466,10 +3543,15 @@ async function renderExecutiveDashboard() {
       const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
       const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
       
+      const pctSin = totalBeneficiarios > 0 ? ((globalSinIniciar / totalBeneficiarios) * 100).toFixed(1) : '0.0';
+      const pctEjec = totalBeneficiarios > 0 ? ((globalEjecucion / totalBeneficiarios) * 100).toFixed(1) : '0.0';
+      const pctTerm = totalBeneficiarios > 0 ? ((globalTerminadas / totalBeneficiarios) * 100).toFixed(1) : '0.0';
+
       chartEstadosDonut = new Chart(ctxDonut, {
         type: 'doughnut',
+        plugins: [visibleDonutPercentagePlugin],
         data: {
-          labels: ['Sin Iniciar', 'En Ejecución', 'Terminadas'],
+          labels: [`Sin Iniciar (${pctSin}%)`, `En Ejecución (${pctEjec}%)`, `Terminadas (${pctTerm}%)`],
           datasets: [{
             data: [globalSinIniciar, globalEjecucion, globalTerminadas],
             backgroundColor: ['#64748b', '#ea580c', '#059669'],
@@ -3484,7 +3566,7 @@ async function renderExecutiveDashboard() {
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { boxWidth: 12, padding: 15, font: { size: 11, weight: '600' }, color: textColor }
+              labels: { boxWidth: 12, padding: 15, font: { size: 11, weight: '700' }, color: textColor }
             },
             tooltip: {
               callbacks: {
@@ -3616,6 +3698,7 @@ async function renderExecutiveDashboard() {
 
       chartMunicipiosStacked = new Chart(ctxStacked, {
         type: 'bar',
+        plugins: [visibleBarLabelsPlugin],
         data: {
           labels,
           datasets: [
@@ -4164,7 +4247,7 @@ function renderReportCharts(total, sinIniciar, ejecucion, terminadas, selectedMu
     if (chartReportDonut) chartReportDonut.destroy();
 
     const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
-    chartReportDonut = new Chart(ctxDonut, {
+    chartReportDonut = new Chart(ctxDonut, { plugins: [visibleDonutPercentagePlugin],
       type: 'doughnut',
       data: {
         labels: ['Sin Iniciar', 'En Ejecución', 'Terminadas'],
@@ -4256,7 +4339,7 @@ function renderReportCharts(total, sinIniciar, ejecucion, terminadas, selectedMu
     const dataAvgsF1 = sortedGroups.map((g) => parseFloat(g.f1.avg.toFixed(2)));
     const dataAvgsF2 = sortedGroups.map((g) => parseFloat(g.f2.avg.toFixed(2)));
 
-    chartReportBar = new Chart(ctxBar, {
+    chartReportBar = new Chart(ctxBar, { plugins: [visibleBarLabelsPlugin],
       type: 'bar',
       data: {
         labels,
@@ -4363,7 +4446,7 @@ function renderReportCharts(total, sinIniciar, ejecucion, terminadas, selectedMu
       const ctxAct = canvasAct.getContext('2d');
       if (chartReportActividades) chartReportActividades.destroy();
 
-      chartReportActividades = new Chart(ctxAct, {
+      chartReportActividades = new Chart(ctxAct, { plugins: [visibleBarLabelsPlugin],
         type: 'bar',
         data: {
           labels: actReportData.map((a) => `${a.orden}. ${a.nombre}`),
@@ -4553,7 +4636,7 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
     const avgs = veredasList.map((v) => parseFloat(v.avg.toFixed(1)));
     const bgColors = veredasList.map((v) => v.avg >= 99.9 ? '#059669' : v.avg > 0 ? '#ea580c' : '#94a3b8');
 
-    chartReportVeredasMun = new Chart(ctx, {
+    chartReportVeredasMun = new Chart(ctx, { plugins: [visibleBarLabelsPlugin],
       type: 'bar',
       data: {
         labels,
