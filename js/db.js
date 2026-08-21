@@ -4,7 +4,7 @@
  */
 
 const DB_NAME = 'BateriaOfflineDB';
-const DB_VERSION = 6; // Actualizado a versión 6 con Inspecciones de Campo e Historial
+const DB_VERSION = 7; // Versión 7: Purgado de caché y sincronización estricta con AWS RDS
 const API_URL = '/api';
 
 class DatabaseManager {
@@ -18,6 +18,13 @@ class DatabaseManager {
 
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
+
+        // Limpiar almacén de usuarios en caso de migración de versión
+        if (db.objectStoreNames.contains('usuarios')) {
+          const tx = event.target.transaction;
+          const uStore = tx.objectStore('usuarios');
+          uStore.clear();
+        }
 
         // Tabla: Roles
         if (!db.objectStoreNames.contains('roles')) {
