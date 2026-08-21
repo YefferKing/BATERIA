@@ -520,7 +520,7 @@
 
           <div class="stat-card">
             <div class="stat-card-top">
-              <span class="stat-title">Terminadas (100%)</span>
+              <span class="stat-title">Terminadas</span>
             </div>
             <div id="dash-stat-terminadas" class="stat-value" style="color: #059669;">0</div>
           </div>
@@ -546,6 +546,9 @@
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-estados-donut', 'distribucion_estados')" title="Descargar imagen PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
                 </button>
+                <button type="button" class="btn btn-sm" onclick="exportExcelDashboardEstados()" title="Exportar detalle completo a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                  📊 Excel
+                </button>
               </div>
             </div>
             <div class="card-body" style="display: flex; justify-content: center; align-items: center; min-height: 280px; padding: 1rem;">
@@ -565,6 +568,9 @@
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-balance-municipios', 'balance_baterias_terminadas_municipio')" title="Descargar imagen PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
+                </button>
+                <button type="button" class="btn btn-sm" onclick="exportExcelBalanceMunicipios()" title="Exportar balance completo a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                  📊 Excel
                 </button>
               </div>
             </div>
@@ -593,6 +599,9 @@
               <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-municipios-stacked', 'baterias_fase1_vs_fase2')" title="Descargar imagen PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                 📥 PNG
               </button>
+              <button type="button" class="btn btn-sm" onclick="exportExcelComparativoFases()" title="Exportar comparativo completo a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                📊 Excel
+              </button>
             </div>
           </div>
           <div class="card-body" style="padding: 1rem;">
@@ -608,9 +617,14 @@
             <div>
               <h3>🗺️ Balance Territorial Consolidado por Municipio</h3>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="renderExecutiveDashboard()">
-              🔄 Actualizar Datos
-            </button>
+            <div style="display: flex; gap: 0.35rem;">
+              <button type="button" class="btn btn-sm" onclick="exportExcelConsolidadoTerritorial()" title="Exportar consolidado a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                📊 Excel
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="renderExecutiveDashboard()">
+                🔄 Actualizar Datos
+              </button>
+            </div>
           </div>
           <div class="table-container">
             <table class="data-table">
@@ -834,6 +848,9 @@
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-donut', 'proporcion_estados_filtrados')" title="Descargar PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
                 </button>
+                <button type="button" class="btn btn-sm" onclick="exportExcelReporteEstados()" title="Exportar detalle a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                  📊 Excel
+                </button>
               </div>
             </div>
             <div class="card-body" style="display: flex; justify-content: center; align-items: center; min-height: 270px; padding: 1rem;">
@@ -853,6 +870,9 @@
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-bar', 'avance_segmentos_filtrados')" title="Descargar PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
+                </button>
+                <button type="button" class="btn btn-sm" onclick="exportExcelReporteSegmentos()" title="Exportar avance a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                  📊 Excel
                 </button>
               </div>
             </div>
@@ -886,6 +906,9 @@
                 </button>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-veredas-mun', 'avance_veredas_municipio')" title="Descargar PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
+                </button>
+                <button type="button" class="btn btn-sm" onclick="exportExcelReporteVeredas()" title="Exportar veredas a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                  📊 Excel
                 </button>
               </div>
             </div>
@@ -923,6 +946,9 @@
               </button>
               <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-actividades', 'avance_13_actividades_filtradas')" title="Descargar imagen PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                 📥 PNG
+              </button>
+              <button type="button" class="btn btn-sm" onclick="exportExcelReporteActividades()" title="Exportar actividades a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                📊 Excel
               </button>
             </div>
           </div>

@@ -2587,6 +2587,576 @@ window.downloadChartImage = function (canvasId, filename = 'grafica') {
   document.body.removeChild(link);
 };
 
+
+/* ==========================================================================
+   EXPORTADORES DE EXCEL DETALLADOS PARA DASHBOARD Y REPORTES
+   ========================================================================== */
+window.downloadExcelFromHtml = function (filename, sheetName, htmlContent) {
+  const fullHtml = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>${sheetName || 'Datos'}</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th { background-color: #059669; color: #ffffff; font-weight: bold; border: 1px solid #047857; text-align: center; padding: 7px; font-size: 11pt; }
+        td { border: 1px solid #cbd5e1; padding: 6px; text-align: left; font-size: 10pt; }
+        .th-blue { background-color: #0284c7; color: #ffffff; border: 1px solid #0369a1; }
+        .th-purple { background-color: #7c3aed; color: #ffffff; border: 1px solid #6d28d9; }
+        .th-gray { background-color: #475569; color: #ffffff; border: 1px solid #334155; }
+        .num { text-align: right; }
+        .center { text-align: center; }
+        .title { font-size: 16pt; font-weight: bold; color: #065f46; margin-bottom: 4px; }
+        .subtitle { font-size: 10pt; color: #64748b; margin-bottom: 15px; }
+        .section-header { font-size: 13pt; font-weight: bold; padding: 6px; }
+        .total-row { background-color: #f1f5f9; font-weight: bold; border-top: 2px solid #059669; }
+        .badge-term { background-color: #d1fae5; color: #065f46; font-weight: bold; text-align: center; }
+        .badge-ejec { background-color: #ffedd5; color: #9a3412; font-weight: bold; text-align: center; }
+        .badge-sin { background-color: #f1f5f9; color: #475569; text-align: center; }
+      </style>
+    </head>
+    <body>
+      ${htmlContent}
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob(['\uFEFF' + fullHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.xls`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast(`📊 Archivo Excel "${filename}.xls" descargado con éxito con información detallada.`, 'success');
+};
+
+// 1. Exportar Detalle de Estados Globales
+window.exportExcelDashboardEstados = async function () {
+  const allBen = await window.dbManager.getBeneficiarios();
+  let allInspections = [];
+  if (navigator.onLine) {
+    try {
+      const res = await fetch('/api/inspecciones?limit=2000');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) allInspections = json.data;
+      }
+    } catch (e) {}
+  }
+  if (allInspections.length === 0) {
+    allInspections = await window.dbManager.getPendingInspecciones();
+  }
+
+  const benProgressMap = {};
+  const inspMap = {};
+  allInspections.forEach((insp) => {
+    if (benProgressMap[insp.beneficiario_id] === undefined) {
+      benProgressMap[insp.beneficiario_id] = parseFloat(insp.avance_global) || 0;
+      inspMap[insp.beneficiario_id] = insp;
+    }
+  });
+
+  let cTerm = 0, cEjec = 0, cSin = 0;
+  const listDetails = (allBen || []).map((b, idx) => {
+    const prog = benProgressMap[b.id] !== undefined ? benProgressMap[b.id] : 0;
+    let estado = 'Sin Iniciar';
+    let estadoCls = 'badge-sin';
+    if (prog >= 99.9) {
+      estado = 'Terminada';
+      estadoCls = 'badge-term';
+      cTerm++;
+    } else if (prog > 0) {
+      estado = 'En Ejecución';
+      estadoCls = 'badge-ejec';
+      cEjec++;
+    } else {
+      cSin++;
+    }
+    const lastInsp = inspMap[b.id];
+    return {
+      num: idx + 1,
+      documento: b.documento || '--',
+      nombre: b.nombre || '',
+      municipio: b.municipio || '',
+      vereda: b.vereda || '',
+      fase: b.fase === 2 ? 'Fase 2' : 'Fase 1',
+      prog: prog.toFixed(2),
+      estado,
+      estadoCls,
+      inspector: b.inspector_nombre || (lastInsp ? lastInsp.inspector_nombre : 'Sin Asignar'),
+      fecha: lastInsp ? (lastInsp.fecha_inspeccion ? lastInsp.fecha_inspeccion.substring(0, 10) : '') : '--'
+    };
+  });
+
+  const tot = listDetails.length;
+  const html = `
+    <div class="title">REPORTE DETALLADO: DISTRIBUCIÓN GLOBAL DE ESTADOS</div>
+    <div class="subtitle">Proyecto Construcción de Baterías Sanitarias Rurales - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Estado Constructivo</th>
+          <th>Cantidad de Baterías</th>
+          <th>Porcentaje del Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🟢 Terminadas (100%)</td>
+          <td class="num"><strong>${cTerm.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cTerm / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td>🟠 En Ejecución (1% - 99%)</td>
+          <td class="num"><strong>${cEjec.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cEjec / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td>⚪ Sin Iniciar (0%)</td>
+          <td class="num"><strong>${cSin.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cSin / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr class="total-row">
+          <td>TOTAL UNIVERSO BENEFICIARIOS</td>
+          <td class="num"><strong>${tot.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>100.00%</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <br>
+    <div class="section-header" style="color:#059669;">📋 DESGLOSE INDIVIDUAL DE TODOS LOS BENEFICIARIOS (${tot})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cédula / Documento</th>
+          <th>Nombre del Beneficiario</th>
+          <th>Municipio</th>
+          <th>Vereda</th>
+          <th>Fase</th>
+          <th>% Avance Físico</th>
+          <th>Estado</th>
+          <th>Inspector Asignado</th>
+          <th>Última Visita</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${listDetails.map(d => `
+          <tr>
+            <td class="center">${d.num}</td>
+            <td><code>${d.documento}</code></td>
+            <td><strong>${escapeHtml(d.nombre)}</strong></td>
+            <td>${escapeHtml(d.municipio)}</td>
+            <td>${escapeHtml(d.vereda)}</td>
+            <td class="center">${d.fase}</td>
+            <td class="num"><strong>${d.prog}%</strong></td>
+            <td class="${d.estadoCls}">${d.estado}</td>
+            <td>${escapeHtml(d.inspector)}</td>
+            <td class="center">${d.fecha}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('reporte_estados_globales', 'Distribucion Estados', html);
+};
+
+// 2. Exportar Balance General de Baterías Terminadas por Municipio
+window.exportExcelBalanceMunicipios = async function () {
+  const allBen = await window.dbManager.getBeneficiarios();
+  const allMunsList = typeof window.dbManager.getMunicipios === 'function' ? await window.dbManager.getMunicipios() : [];
+  let allInspections = [];
+  if (navigator.onLine) {
+    try {
+      const res = await fetch('/api/inspecciones?limit=2000');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) allInspections = json.data;
+      }
+    } catch (e) {}
+  }
+  if (allInspections.length === 0) {
+    allInspections = await window.dbManager.getPendingInspecciones();
+  }
+
+  const benProgressMap = {};
+  allInspections.forEach((insp) => {
+    if (benProgressMap[insp.beneficiario_id] === undefined) {
+      benProgressMap[insp.beneficiario_id] = parseFloat(insp.avance_global) || 0;
+    }
+  });
+
+  const munMap = {};
+  allMunsList.forEach(m => {
+    const name = (m.nombre || '').trim().toUpperCase();
+    if (name) {
+      munMap[name] = {
+        total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0,
+        f1: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 },
+        f2: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 }
+      };
+    }
+  });
+
+  (allBen || []).forEach(b => {
+    const mun = (b.municipio || 'SIN MUNICIPIO').trim().toUpperCase();
+    if (!munMap[mun]) {
+      munMap[mun] = {
+        total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0,
+        f1: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 },
+        f2: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 }
+      };
+    }
+    const prog = benProgressMap[b.id] !== undefined ? benProgressMap[b.id] : 0;
+    const fKey = b.fase === 2 ? 'f2' : 'f1';
+
+    munMap[mun].total++;
+    munMap[mun].sumProgress += prog;
+    munMap[mun][fKey].total++;
+    munMap[mun][fKey].sumProgress += prog;
+
+    if (prog >= 99.9) {
+      munMap[mun].terminadas++;
+      munMap[mun][fKey].terminadas++;
+    } else if (prog > 0) {
+      munMap[mun].ejecucion++;
+      munMap[mun][fKey].ejecucion++;
+    } else {
+      munMap[mun].sinIniciar++;
+      munMap[mun][fKey].sinIniciar++;
+    }
+  });
+
+  const munsArr = Object.entries(munMap).map(([name, d]) => ({ name, ...d })).filter(m => m.total > 0);
+  const f1List = munsArr.filter(m => m.f1.total > 0).sort((a, b) => (b.f1.terminadas / b.f1.total) - (a.f1.terminadas / a.f1.total) || a.name.localeCompare(b.name, 'es'));
+  const f2List = munsArr.filter(m => m.f2.total > 0).sort((a, b) => (b.f2.terminadas / b.f2.total) - (a.f2.terminadas / a.f2.total) || a.name.localeCompare(b.name, 'es'));
+
+  const sumF1Tot = f1List.reduce((acc, m) => acc + m.f1.total, 0);
+  const sumF1Term = f1List.reduce((acc, m) => acc + m.f1.terminadas, 0);
+  const sumF1Ejec = f1List.reduce((acc, m) => acc + m.f1.ejecucion, 0);
+  const sumF1Sin = f1List.reduce((acc, m) => acc + m.f1.sinIniciar, 0);
+
+  const sumF2Tot = f2List.reduce((acc, m) => acc + m.f2.total, 0);
+  const sumF2Term = f2List.reduce((acc, m) => acc + m.f2.terminadas, 0);
+  const sumF2Ejec = f2List.reduce((acc, m) => acc + m.f2.ejecucion, 0);
+  const sumF2Sin = f2List.reduce((acc, m) => acc + m.f2.sinIniciar, 0);
+
+  const html = `
+    <div class="title">BALANCE TERRITORIAL: BATERÍAS TERMINADAS POR MUNICIPIO</div>
+    <div class="subtitle">Comparativo organizado por Fase 1 y Fase 2 - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <div class="section-header" style="color:#0284c7;">🔵 FASE 1 (CATATUMBO / NORTE DE SANTANDER)</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="th-blue">Municipio</th>
+          <th class="th-blue">Total Asignadas</th>
+          <th class="th-blue">Baterías Terminadas</th>
+          <th class="th-blue">% Terminadas</th>
+          <th class="th-blue">En Ejecución</th>
+          <th class="th-blue">Sin Iniciar</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${f1List.map(m => {
+          const pct = ((m.f1.terminadas / m.f1.total) * 100).toFixed(1);
+          return `
+            <tr>
+              <td><strong>${escapeHtml(m.name)}</strong></td>
+              <td class="num">${m.f1.total}</td>
+              <td class="num" style="color:#059669; font-weight:bold;">${m.f1.terminadas}</td>
+              <td class="num" style="font-weight:bold;">${pct}%</td>
+              <td class="num">${m.f1.ejecucion}</td>
+              <td class="num">${m.f1.sinIniciar}</td>
+            </tr>
+          `;
+        }).join('')}
+        <tr class="total-row">
+          <td>SUBTOTAL FASE 1</td>
+          <td class="num">${sumF1Tot}</td>
+          <td class="num" style="color:#059669;">${sumF1Term}</td>
+          <td class="num">${(sumF1Tot > 0 ? (sumF1Term / sumF1Tot) * 100 : 0).toFixed(1)}%</td>
+          <td class="num">${sumF1Ejec}</td>
+          <td class="num">${sumF1Sin}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <br>
+    <div class="section-header" style="color:#7c3aed;">🟣 FASE 2 (ÁREA METROPOLITANA Y OTRAS ZONAS)</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="th-purple">Municipio</th>
+          <th class="th-purple">Total Asignadas</th>
+          <th class="th-purple">Baterías Terminadas</th>
+          <th class="th-purple">% Terminadas</th>
+          <th class="th-purple">En Ejecución</th>
+          <th class="th-purple">Sin Iniciar</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${f2List.map(m => {
+          const pct = ((m.f2.terminadas / m.f2.total) * 100).toFixed(1);
+          return `
+            <tr>
+              <td><strong>${escapeHtml(m.name)}</strong></td>
+              <td class="num">${m.f2.total}</td>
+              <td class="num" style="color:#059669; font-weight:bold;">${m.f2.terminadas}</td>
+              <td class="num" style="font-weight:bold;">${pct}%</td>
+              <td class="num">${m.f2.ejecucion}</td>
+              <td class="num">${m.f2.sinIniciar}</td>
+            </tr>
+          `;
+        }).join('')}
+        <tr class="total-row">
+          <td>SUBTOTAL FASE 2</td>
+          <td class="num">${sumF2Tot}</td>
+          <td class="num" style="color:#059669;">${sumF2Term}</td>
+          <td class="num">${(sumF2Tot > 0 ? (sumF2Term / sumF2Tot) * 100 : 0).toFixed(1)}%</td>
+          <td class="num">${sumF2Ejec}</td>
+          <td class="num">${sumF2Sin}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <br>
+    <table>
+      <thead>
+        <tr>
+          <th>RESUMEN CONSOLIDADO DEL PROYECTO</th>
+          <th>TOTAL ASIGNADAS</th>
+          <th>TOTAL TERMINADAS</th>
+          <th>% TERMINACIÓN GLOBAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="total-row" style="font-size:12pt;">
+          <td>TOTAL GENERAL</td>
+          <td class="num">${(sumF1Tot + sumF2Tot).toLocaleString('es-CO')}</td>
+          <td class="num" style="color:#059669;">${(sumF1Term + sumF2Term).toLocaleString('es-CO')}</td>
+          <td class="num" style="color:#059669;">${((sumF1Tot + sumF2Tot) > 0 ? ((sumF1Term + sumF2Term) / (sumF1Tot + sumF2Tot)) * 100 : 0).toFixed(2)}%</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('balance_baterias_terminadas_municipio', 'Balance Terminadas', html);
+};
+
+// 3. Exportar Comparativo de Fases
+window.exportExcelComparativoFases = async function () {
+  const allBen = await window.dbManager.getBeneficiarios();
+  const allMunsList = typeof window.dbManager.getMunicipios === 'function' ? await window.dbManager.getMunicipios() : [];
+  let allInspections = [];
+  if (navigator.onLine) {
+    try {
+      const res = await fetch('/api/inspecciones?limit=2000');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && Array.isArray(json.data)) allInspections = json.data;
+      }
+    } catch (e) {}
+  }
+  if (allInspections.length === 0) {
+    allInspections = await window.dbManager.getPendingInspecciones();
+  }
+
+  const benProgressMap = {};
+  allInspections.forEach((insp) => {
+    if (benProgressMap[insp.beneficiario_id] === undefined) {
+      benProgressMap[insp.beneficiario_id] = parseFloat(insp.avance_global) || 0;
+    }
+  });
+
+  const munMap = {};
+  allMunsList.forEach(m => {
+    const name = (m.nombre || '').trim().toUpperCase();
+    if (name) {
+      munMap[name] = {
+        total: 0,
+        f1: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 },
+        f2: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 }
+      };
+    }
+  });
+
+  (allBen || []).forEach(b => {
+    const mun = (b.municipio || 'SIN MUNICIPIO').trim().toUpperCase();
+    if (!munMap[mun]) {
+      munMap[mun] = {
+        total: 0,
+        f1: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 },
+        f2: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 }
+      };
+    }
+    const prog = benProgressMap[b.id] !== undefined ? benProgressMap[b.id] : 0;
+    const fKey = b.fase === 2 ? 'f2' : 'f1';
+
+    munMap[mun].total++;
+    munMap[mun][fKey].total++;
+    munMap[mun][fKey].sumProgress += prog;
+
+    if (prog >= 99.9) {
+      munMap[mun][fKey].terminadas++;
+    } else if (prog > 0) {
+      munMap[mun][fKey].ejecucion++;
+    } else {
+      munMap[mun][fKey].sinIniciar++;
+    }
+  });
+
+  const munsArr = Object.entries(munMap).map(([name, d]) => ({ name, ...d })).filter(m => m.total > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+  const html = `
+    <div class="title">COMPARATIVO TERRITORIAL: BATERÍAS ASIGNADAS (FASE 1 VS FASE 2)</div>
+    <div class="subtitle">Detalle completo de los 15 municipios del proyecto - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th rowspan="2" class="th-gray">Municipio</th>
+          <th colspan="4" class="th-blue">FASE 1</th>
+          <th colspan="4" class="th-purple">FASE 2</th>
+          <th rowspan="2" class="th-gray">Total Baterías</th>
+        </tr>
+        <tr>
+          <th class="th-blue">Total F1</th>
+          <th class="th-blue">Terminadas</th>
+          <th class="th-blue">Ejecución</th>
+          <th class="th-blue">Sin Iniciar</th>
+          <th class="th-purple">Total F2</th>
+          <th class="th-purple">Terminadas</th>
+          <th class="th-purple">Ejecución</th>
+          <th class="th-purple">Sin Iniciar</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${munsArr.map(m => `
+          <tr>
+            <td><strong>${escapeHtml(m.name)}</strong></td>
+            <td class="num">${m.f1.total}</td>
+            <td class="num" style="color:#059669;">${m.f1.terminadas}</td>
+            <td class="num">${m.f1.ejecucion}</td>
+            <td class="num">${m.f1.sinIniciar}</td>
+            <td class="num">${m.f2.total}</td>
+            <td class="num" style="color:#059669;">${m.f2.terminadas}</td>
+            <td class="num">${m.f2.ejecucion}</td>
+            <td class="num">${m.f2.sinIniciar}</td>
+            <td class="num" style="font-weight:bold; background:#f8fafc;">${m.total}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('comparativo_fase1_vs_fase2', 'Comparativo Fases', html);
+};
+
+// 4. Exportar Balance Territorial Consolidado
+window.exportExcelConsolidadoTerritorial = async function () {
+  await window.exportExcelBalanceMunicipios();
+};
+
+// 5. Exportadores para la Pestaña de Reportes
+window.exportExcelReporteEstados = async function () {
+  await window.exportExcelDashboardEstados();
+};
+
+window.exportExcelReporteSegmentos = async function () {
+  await window.exportExcelComparativoFases();
+};
+
+window.exportExcelReporteVeredas = async function () {
+  const select = document.getElementById('chart-veredas-municipio-select');
+  const munName = select ? select.value : 'TODOS';
+  const allBen = await window.dbManager.getBeneficiarios();
+  const filtered = allBen.filter(b => munName === 'TODOS' || (b.municipio || '').toUpperCase() === munName.toUpperCase());
+
+  const html = `
+    <div class="title">REPORTE DETALLADO POR VEREDAS: ${escapeHtml(munName)}</div>
+    <div class="subtitle">Total Registros: ${filtered.length} - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cédula</th>
+          <th>Nombre del Beneficiario</th>
+          <th>Municipio</th>
+          <th>Vereda</th>
+          <th>Fase</th>
+          <th>Inspector</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${filtered.map((b, idx) => `
+          <tr>
+            <td class="center">${idx + 1}</td>
+            <td><code>${b.documento}</code></td>
+            <td><strong>${escapeHtml(b.nombre)}</strong></td>
+            <td>${escapeHtml(b.municipio)}</td>
+            <td>${escapeHtml(b.vereda)}</td>
+            <td class="center">${b.fase === 2 ? 'Fase 2' : 'Fase 1'}</td>
+            <td>${escapeHtml(b.inspector_nombre || 'Sin Asignar')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml(`reporte_veredas_${munName.toLowerCase()}`, 'Veredas', html);
+};
+
+window.exportExcelReporteActividades = async function () {
+  const activities = await window.dbManager.getActividades();
+  const html = `
+    <div class="title">REPORTE DETALLADO: AVANCE POR 13 ACTIVIDADES CONSTRUCTIVAS</div>
+    <div class="subtitle">Ponderación Oficial de Capítulos de Obra - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th># Ítem</th>
+          <th>Capítulo / Actividad Constructiva</th>
+          <th>Peso / Ponderación Oficial</th>
+          <th>Descripción</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${(activities || []).map(a => `
+          <tr>
+            <td class="center"><strong>${a.orden}</strong></td>
+            <td><strong>${escapeHtml(a.nombre)}</strong></td>
+            <td class="num"><strong>${a.ponderacion}%</strong></td>
+            <td>${escapeHtml(a.descripcion || '--')}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('avance_13_actividades_constructivas', 'Actividades', html);
+};
+
 window.renderProgressBarsReportToCanvas = function (canvas, fase1Muns, fase2Muns, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global) {
   if (!canvas) return;
 
