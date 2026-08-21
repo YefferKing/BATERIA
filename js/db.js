@@ -115,93 +115,87 @@ class DatabaseManager {
   // Sincronizar catálogo de roles, usuarios, municipios, veredas, beneficiarios, actividades y zonas desde MySQL
   async syncDataFromMySQL() {
     try {
-      // 1. Sincronizar Usuarios
-      const resUsers = await fetch(`${API_URL}/usuarios`, { signal: AbortSignal.timeout(3000) });
-      if (resUsers.ok) {
-        const json = await resUsers.json();
-        if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
-          const tx = this.db.transaction('usuarios', 'readwrite');
-          const store = tx.objectStore('usuarios');
-          for (const u of json.data) {
-            store.put(u);
+      if (!navigator.onLine) return;
+
+      // 1. Sincronizar Usuarios (Solo los que existan en MySQL)
+      try {
+        const resUsers = await fetch(`${API_URL}/usuarios`, { signal: AbortSignal.timeout(15000) });
+        if (resUsers.ok) {
+          const json = await resUsers.json();
+          if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+            const tx = this.db.transaction('usuarios', 'readwrite');
+            const store = tx.objectStore('usuarios');
+            store.clear(); // Limpiar inspectores quemados o viejos
+            for (const u of json.data) {
+              store.put(u);
+            }
+            await new Promise((res, rej) => {
+              tx.oncomplete = () => res(true);
+              tx.onerror = () => rej(tx.error);
+            });
           }
-          await new Promise((res, rej) => {
-            tx.oncomplete = () => res(true);
-            tx.onerror = () => rej(tx.error);
-          });
         }
+      } catch (errU) {
+        console.log('Error sincronizando usuarios de MySQL:', errU.message);
       }
 
-      // 2. Sincronizar Municipios, Veredas, Beneficiarios, Actividades y Asignaciones Territoriales para trabajo de campo Offline
-      const resCat = await fetch(`${API_URL}/beneficiarios/catalogos`, { signal: AbortSignal.timeout(6000) });
-      if (resCat.ok) {
-        const jsonCat = await resCat.json();
-        if (jsonCat.ok && jsonCat.data) {
-          const { municipios, veredas, beneficiarios, actividades, usuario_veredas } = jsonCat.data;
+      // 2. Sincronizar Municipios, Veredas, Beneficiarios, Actividades y Asignaciones Territoriales
+      try {
+        const resCat = await fetch(`${API_URL}/beneficiarios/catalogos`, { signal: AbortSignal.timeout(30000) });
+        if (resCat.ok) {
+          const jsonCat = await resCat.json();
+          if (jsonCat.ok && jsonCat.data) {
+            const { municipios, veredas, beneficiarios, actividades, usuario_veredas } = jsonCat.data;
 
-          if (Array.isArray(municipios) && municipios.length > 0) {
-            const txM = this.db.transaction('municipios', 'readwrite');
-            const storeM = txM.objectStore('municipios');
-            for (const m of municipios) storeM.put(m);
-          }
+            if (Array.isArray(municipios) && municipios.length > 0) {
+              const txM = this.db.transaction('municipios', 'readwrite');
+              const storeM = txM.objectStore('municipios');
+              storeM.clear();
+              for (const m of municipios) storeM.put(m);
+            }
 
-          if (Array.isArray(veredas) && veredas.length > 0) {
-            const txV = this.db.transaction('veredas', 'readwrite');
-            const storeV = txV.objectStore('veredas');
-            for (const v of veredas) storeV.put(v);
-          }
+            if (Array.isArray(veredas) && veredas.length > 0) {
+              const txV = this.db.transaction('veredas', 'readwrite');
+              const storeV = txV.objectStore('veredas');
+              storeV.clear();
+              for (const v of veredas) storeV.put(v);
+            }
 
-          if (Array.isArray(beneficiarios) && beneficiarios.length > 0) {
-            const txB = this.db.transaction('beneficiarios', 'readwrite');
-            const storeB = txB.objectStore('beneficiarios');
-            for (const b of beneficiarios) storeB.put(b);
-          }
+            if (Array.isArray(beneficiarios) && beneficiarios.length > 0) {
+              const txB = this.db.transaction('beneficiarios', 'readwrite');
+              const storeB = txB.objectStore('beneficiarios');
+              storeB.clear();
+              for (const b of beneficiarios) storeB.put(b);
+            }
 
-          if (Array.isArray(actividades) && actividades.length > 0) {
-            const txA = this.db.transaction('actividades', 'readwrite');
-            const storeA = txA.objectStore('actividades');
-            for (const a of actividades) storeA.put(a);
-          }
+            if (Array.isArray(actividades) && actividades.length > 0) {
+              const txA = this.db.transaction('actividades', 'readwrite');
+              const storeA = txA.objectStore('actividades');
+              storeA.clear();
+              for (const a of actividades) storeA.put(a);
+            }
 
-          if (Array.isArray(usuario_veredas)) {
-            const txUV = this.db.transaction('usuario_veredas', 'readwrite');
-            const storeUV = txUV.objectStore('usuario_veredas');
-            storeUV.clear();
-            for (const uv of usuario_veredas) storeUV.put(uv);
+            if (Array.isArray(usuario_veredas)) {
+              const txUV = this.db.transaction('usuario_veredas', 'readwrite');
+              const storeUV = txUV.objectStore('usuario_veredas');
+              storeUV.clear();
+              for (const uv of usuario_veredas) storeUV.put(uv);
+            }
           }
         }
+      } catch (errC) {
+        console.log('Error sincronizando catálogos de MySQL:', errC.message);
       }
     } catch (e) {
       console.log('Modo Offline: Usando base de datos interna del dispositivo.');
     }
-
-    // Fallback: Sembrar datos locales si no hay registros
-    const count = await this.countUsers();
-    if (count === 0) {
-      await this.seedInitialLocalData();
-    }
   }
 
   async seedInitialLocalData() {
+    // Solo administrador por defecto si no hay nada en la BD
     const defaultUsers = [
       { id: 1, nombre: 'Administrador Principal', usuario: 'admin', documento: '00000000', pin: '1234', rol_id: 1, rol_nombre: 'admin', cargo: 'Super Administrador', activo: 1, permisos: ['VER_PANEL_ADMIN', 'GESTIONAR_INSPECTORES', 'EDITAR_PIN_INSPECTOR', 'VER_REGISTROS_GLOBALES', 'EXPORTAR_DATOS', 'DILIGENCIAR_FORMULARIO'] }
     ];
-
-    for (let i = 1; i <= 20; i++) {
-      const numPadded = String(i).padStart(2, '0');
-      defaultUsers.push({
-        id: i + 1,
-        nombre: `Inspector ${numPadded}`,
-        usuario: `inspector${numPadded}`,
-        documento: `100000${numPadded}`,
-        pin: `11${numPadded}`,
-        rol_id: 2,
-        rol_nombre: 'inspector',
-        cargo: `Inspector de Campo #${numPadded}`,
-        activo: 1,
-        permisos: ['DILIGENCIAR_FORMULARIO']
-      });
-    }
 
     const tx = this.db.transaction('usuarios', 'readwrite');
     const store = tx.objectStore('usuarios');
@@ -345,36 +339,59 @@ class DatabaseManager {
   }
 
   async getBeneficiarios(filters = {}) {
-    return new Promise((resolve, reject) => {
-      const tx = this.db.transaction('beneficiarios', 'readonly');
-      const store = tx.objectStore('beneficiarios');
-      const req = store.getAll();
-      req.onsuccess = () => {
-        let results = req.result || [];
-        if (filters.municipio_id) {
-          results = results.filter((b) => b.municipio_id === parseInt(filters.municipio_id, 10));
-        }
-        if (filters.vereda_id) {
-          results = results.filter((b) => b.vereda_id === parseInt(filters.vereda_id, 10));
-        }
-        if (filters.fase) {
-          results = results.filter((b) => b.fase === parseInt(filters.fase, 10));
-        }
-        if (filters.estado !== undefined && filters.estado !== '') {
-          results = results.filter((b) => b.estado === parseInt(filters.estado, 10));
-        }
-        if (filters.search) {
-          const term = filters.search.toLowerCase().trim();
-          results = results.filter(
-            (b) =>
-              (b.nombre && b.nombre.toLowerCase().includes(term)) ||
-              (b.documento && String(b.documento).includes(term))
-          );
-        }
-        resolve(results);
-      };
-      req.onerror = () => reject(req.error);
+    let localResults = await new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction('beneficiarios', 'readonly');
+        const store = tx.objectStore('beneficiarios');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
     });
+
+    // Si la base local está vacía pero hay conexión a internet, traer de MySQL
+    if (localResults.length === 0 && navigator.onLine) {
+      try {
+        const res = await fetch(`${API_URL}/beneficiarios/catalogos`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && json.data && Array.isArray(json.data.beneficiarios) && json.data.beneficiarios.length > 0) {
+            localResults = json.data.beneficiarios;
+            // Guardar en segundo plano en IndexedDB
+            const tx = this.db.transaction('beneficiarios', 'readwrite');
+            const store = tx.objectStore('beneficiarios');
+            for (const b of localResults) store.put(b);
+          }
+        }
+      } catch (e) {
+        console.log('Error trayendo beneficiarios de MySQL:', e.message);
+      }
+    }
+
+    let results = localResults || [];
+    if (filters.municipio_id) {
+      results = results.filter((b) => b.municipio_id === parseInt(filters.municipio_id, 10));
+    }
+    if (filters.vereda_id) {
+      results = results.filter((b) => b.vereda_id === parseInt(filters.vereda_id, 10));
+    }
+    if (filters.fase) {
+      results = results.filter((b) => b.fase === parseInt(filters.fase, 10));
+    }
+    if (filters.estado !== undefined && filters.estado !== '') {
+      results = results.filter((b) => b.estado === parseInt(filters.estado, 10));
+    }
+    if (filters.search) {
+      const term = filters.search.toLowerCase().trim();
+      results = results.filter(
+        (b) =>
+          (b.nombre && b.nombre.toLowerCase().includes(term)) ||
+          (b.documento && String(b.documento).includes(term))
+      );
+    }
+    return results;
   }
 
   async updateBeneficiario(beneficiario) {
