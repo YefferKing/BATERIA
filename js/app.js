@@ -3914,16 +3914,52 @@ async function renderExecutiveDashboard() {
       }).join('');
     }
 
-    // 10. Tabla Territorial Consolidada por Municipio
+    // 10. Tabla Territorial Consolidada por Municipio (Ordenada: Primero Fase 1 y luego Fase 2)
     const tbody = document.getElementById('dash-municipios-tbody');
     if (tbody) {
       if (sortedMuns.length === 0) {
         tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--text-muted);">Sin datos de municipios</td></tr>`;
       } else {
-        tbody.innerHTML = sortedMuns.map((m) => {
+        // Ordenar primero todos los de Fase 1, luego los mixtos, y luego los de Fase 2
+        const tableF1Only = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total === 0).sort((a, b) => b.terminadas - a.terminadas || a.name.localeCompare(b.name, 'es'));
+        const tableBoth = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        const tableF2Only = sortedMuns.filter(m => m.f2.total > 0 && m.f1.total === 0).sort((a, b) => b.terminadas - a.terminadas || a.name.localeCompare(b.name, 'es'));
+        const tableMunsOrdered = [...tableF1Only, ...tableBoth, ...tableF2Only];
+
+        tbody.innerHTML = tableMunsOrdered.map((m) => {
+          const hasF1 = m.f1.total > 0;
+          const hasF2 = m.f2.total > 0;
+
           const pctSin = m.total > 0 ? ((m.sinIniciar / m.total) * 100).toFixed(1) : '0.0';
           const pctEjec = m.total > 0 ? ((m.ejecucion / m.total) * 100).toFixed(1) : '0.0';
           const pctTerm = m.total > 0 ? ((m.terminadas / m.total) * 100).toFixed(1) : '0.0';
+
+          let faseBadgeHtml = '';
+          if (hasF1 && hasF2) {
+            faseBadgeHtml = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.68rem; margin-right:3px;">🔵 F1</span><span class="badge" style="background:#f3e8ff; color:#7c3aed; font-size:0.68rem;">🟣 F2</span>';
+          } else if (hasF1) {
+            faseBadgeHtml = '<span class="badge" style="background:#e0f2fe; color:#0284c7; font-size:0.68rem;">🔵 FASE 1</span>';
+          } else {
+            faseBadgeHtml = '<span class="badge" style="background:#f3e8ff; color:#7c3aed; font-size:0.68rem;">🟣 FASE 2</span>';
+          }
+
+          let faseSubtotalHtml = '';
+          if (hasF1 && hasF2) {
+            faseSubtotalHtml = `<span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.total}</span> | <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.total}</span>`;
+          } else if (hasF1) {
+            faseSubtotalHtml = `<span style="color: #0284c7; font-weight: 600;">🔵 ${m.f1.total} Baterías</span>`;
+          } else {
+            faseSubtotalHtml = `<span style="color: #8b5cf6; font-weight: 600;">🟣 ${m.f2.total} Baterías</span>`;
+          }
+
+          let faseProgressSubHtml = '';
+          if (hasF1 && hasF2) {
+            faseProgressSubHtml = `<span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.avg.toFixed(1)}%</span> • <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.avg.toFixed(1)}%</span>`;
+          } else if (hasF1) {
+            faseProgressSubHtml = `<span style="color: #0284c7; font-weight: 600;">🔵 F1: ${m.f1.avg.toFixed(1)}%</span>`;
+          } else {
+            faseProgressSubHtml = `<span style="color: #8b5cf6; font-weight: 600;">🟣 F2: ${m.f2.avg.toFixed(1)}%</span>`;
+          }
 
           let generalBadge = 'badge-status-sin-iniciar';
           let generalLabel = '⚪ Sin Iniciar';
@@ -3937,11 +3973,16 @@ async function renderExecutiveDashboard() {
 
           return `
             <tr>
-              <td><strong style="color: var(--text-primary); font-size: 0.9rem;">🏛️ ${escapeHtml(m.name)}</strong></td>
+              <td>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                  <strong style="color: var(--text-primary); font-size: 0.9rem;">🏛️ ${escapeHtml(m.name)}</strong>
+                  ${faseBadgeHtml}
+                </div>
+              </td>
               <td style="text-align: center;">
                 <span style="font-weight: 700;">${m.total.toLocaleString('es-CO')}</span>
                 <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 1px;">
-                  <span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.total}</span> | <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.total}</span>
+                  ${faseSubtotalHtml}
                 </div>
               </td>
               <td style="text-align: center;">
@@ -3960,7 +4001,7 @@ async function renderExecutiveDashboard() {
                 <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: bold; margin-bottom: 2px;">
                   <span>${m.avg.toFixed(1)}%</span>
                   <span style="font-size: 0.72rem; font-weight: normal; color: var(--text-muted);">
-                    <span style="color: #0284c7; font-weight: 600;">F1: ${m.f1.avg.toFixed(1)}%</span> • <span style="color: #8b5cf6; font-weight: 600;">F2: ${m.f2.avg.toFixed(1)}%</span>
+                    ${faseProgressSubHtml}
                   </span>
                 </div>
                 <div style="height: 6px; background: var(--bg-subtle); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color);">
