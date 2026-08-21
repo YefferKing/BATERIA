@@ -2587,6 +2587,126 @@ window.downloadChartImage = function (canvasId, filename = 'grafica') {
   document.body.removeChild(link);
 };
 
+window.renderProgressBarsReportToCanvas = function (canvas, fase1Muns, fase2Muns, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global) {
+  if (!canvas) return;
+
+  const width = 850;
+  const rowHeight = 34;
+  const headerHeight = 70;
+  const sectionHeaderHeight = 38;
+  const footerHeight = 40;
+
+  const totalHeight = headerHeight + sectionHeaderHeight + (fase1Muns.length * rowHeight) + 15 + sectionHeaderHeight + (fase2Muns.length * rowHeight) + footerHeight;
+
+  canvas.width = width;
+  canvas.height = totalHeight;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  // Fondo Blanco Profesional y Limpio
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, totalHeight);
+
+  // Encabezado
+  ctx.fillStyle = '#0f172a';
+  ctx.font = 'bold 18px "Inter", "Segoe UI", sans-serif';
+  ctx.fillText('📈 BALANCE GENERAL: BATERÍAS TERMINADAS POR MUNICIPIO', 25, 36);
+
+  ctx.fillStyle = '#64748b';
+  ctx.font = '500 12px "Inter", "Segoe UI", sans-serif';
+  ctx.fillText(`Universo Oficial: 1.399 Beneficiarios | Generado: ${new Date().toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })}`, 25, 56);
+
+  let currentY = headerHeight;
+
+  // Función auxiliar para dibujar una sección
+  function drawSection(title, countText, items, isFase1, badgeBg, barColor) {
+    // Encabezado de la fase
+    ctx.fillStyle = badgeBg;
+    ctx.beginPath();
+    ctx.roundRect(25, currentY, width - 50, 30, 4);
+    ctx.fill();
+
+    ctx.fillStyle = barColor;
+    ctx.font = 'bold 13px "Inter", "Segoe UI", sans-serif';
+    ctx.fillText(title, 35, currentY + 20);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.roundRect(width - 230, currentY + 4, 195, 22, 4);
+    ctx.fill();
+
+    ctx.fillStyle = barColor;
+    ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(countText, width - 132, currentY + 19);
+    ctx.textAlign = 'left';
+
+    currentY += sectionHeaderHeight;
+
+    // Items de cada municipio
+    items.forEach((m) => {
+      const term = isFase1 ? m.f1.terminadas : m.f2.terminadas;
+      const tot = isFase1 ? m.f1.total : m.f2.total;
+      const pct = tot > 0 ? parseFloat(((term / tot) * 100).toFixed(1)) : 0;
+
+      // Nombre del municipio
+      ctx.fillStyle = '#1e293b';
+      ctx.font = '600 12px "Inter", "Segoe UI", sans-serif';
+      ctx.fillText(m.name, 35, currentY + 16);
+
+      // Fondo de la barra de progreso
+      const barX = 230;
+      const barWidth = 440;
+      const barH = 10;
+      ctx.fillStyle = '#f1f5f9';
+      ctx.beginPath();
+      ctx.roundRect(barX, currentY + 8, barWidth, barH, 5);
+      ctx.fill();
+
+      // Relleno de la barra
+      if (pct > 0) {
+        ctx.fillStyle = barColor;
+        ctx.beginPath();
+        ctx.roundRect(barX, currentY + 8, Math.max(8, (barWidth * pct) / 100), barH, 5);
+        ctx.fill();
+      }
+
+      // Conteo y porcentaje a la derecha
+      ctx.fillStyle = pct >= 99.9 ? '#059669' : '#0f172a';
+      ctx.font = 'bold 11px "Inter", "Segoe UI", sans-serif';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${term}/${tot} (${pct.toFixed(1)}%)`, width - 35, currentY + 17);
+      ctx.textAlign = 'left';
+
+      // Línea divisoria muy suave
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(35, currentY + rowHeight - 2);
+      ctx.lineTo(width - 35, currentY + rowHeight - 2);
+      ctx.stroke();
+
+      currentY += rowHeight;
+    });
+  }
+
+  // Dibujar FASE 1
+  drawSection(`🔵 FASE 1 (${fase1Muns.length} MUNICIPIOS)`, `${totF1Term} / ${totF1Total} Terminadas (${pctF1Global}%)`, fase1Muns, true, '#e0f2fe', '#0284c7');
+
+  currentY += 12;
+
+  // Dibujar FASE 2
+  drawSection(`🟣 FASE 2 (${fase2Muns.length} MUNICIPIOS)`, `${totF2Term} / ${totF2Total} Terminadas (${pctF2Global}%)`, fase2Muns, false, '#f3e8ff', '#8b5cf6');
+
+  // Pie de página
+  ctx.fillStyle = '#94a3b8';
+  ctx.font = '500 11px "Inter", "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('Proyecto Baterías Sanitarias Rurales - Sistema Oficial de Control y Seguimiento', width / 2, totalHeight - 14);
+  ctx.textAlign = 'left';
+};
+
 async function renderExecutiveDashboard() {
   try {
     // 1. Obtener todos los beneficiarios y filtrar estrictamente los Vivos (Estado = 1)
@@ -2811,129 +2931,104 @@ async function renderExecutiveDashboard() {
       });
     }
 
-    // 8. Gráfica 2 & Barras de Progreso: Balance General (% Baterías Terminadas por Municipio Comparativo Fase 1 vs Fase 2)
+    // 8. Gráfica 2 & Barras de Progreso: Balance General (% Baterías Terminadas por Municipio - Primero Fase 1 y luego Fase 2)
+    const fase1Muns = sortedMuns.filter(m => m.f1.total > 0).sort((a, b) => {
+      const pctB = (b.f1.terminadas / b.f1.total);
+      const pctA = (a.f1.terminadas / a.f1.total);
+      return pctB - pctA || b.f1.terminadas - a.f1.terminadas || a.name.localeCompare(b.name, 'es');
+    });
+
+    const fase2Muns = sortedMuns.filter(m => m.f2.total > 0).sort((a, b) => {
+      const pctB = (b.f2.terminadas / b.f2.total);
+      const pctA = (a.f2.terminadas / a.f2.total);
+      return pctB - pctA || b.f2.terminadas - a.f2.terminadas || a.name.localeCompare(b.name, 'es');
+    });
+
+    const totF1Term = fase1Muns.reduce((acc, m) => acc + m.f1.terminadas, 0);
+    const totF1Total = fase1Muns.reduce((acc, m) => acc + m.f1.total, 0);
+    const pctF1Global = totF1Total > 0 ? ((totF1Term / totF1Total) * 100).toFixed(1) : '0.0';
+
+    const totF2Term = fase2Muns.reduce((acc, m) => acc + m.f2.terminadas, 0);
+    const totF2Total = fase2Muns.reduce((acc, m) => acc + m.f2.total, 0);
+    const pctF2Global = totF2Total > 0 ? ((totF2Term / totF2Total) * 100).toFixed(1) : '0.0';
+
     const progressBarsContainer = document.getElementById('balance-progress-bars-container');
     if (progressBarsContainer) {
       if (sortedMuns.length === 0) {
         progressBarsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay datos registrados aún.</div>';
       } else {
-        progressBarsContainer.innerHTML = sortedMuns.map(m => {
-          const hasF1 = m.f1.total > 0;
-          const hasF2 = m.f2.total > 0;
-          const pctF1 = hasF1 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
-          const pctF2 = hasF2 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
-          const pctTotal = m.total > 0 ? ((m.terminadas / m.total) * 100).toFixed(1) : '0.0';
+        let htmlContent = '';
 
-          return `
-            <div style="background: var(--bg-surface); padding: 0.65rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                <strong style="font-size: 0.88rem; color: var(--text-primary);">${escapeHtml(m.name)}</strong>
-                <span class="badge ${parseFloat(pctTotal) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.75rem;">
-                  🟢 ${m.terminadas} / ${m.total} Terminadas (${pctTotal}%)
+        // SECCIÓN 1: FASE 1
+        htmlContent += `
+          <div style="margin-bottom: 0.5rem; position: sticky; top: 0; background: var(--bg-surface); z-index: 2; padding: 4px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(2, 132, 199, 0.12); padding: 0.45rem 0.75rem; border-radius: var(--radius-sm); border-left: 4px solid #0284c7;">
+              <strong style="font-size: 0.85rem; color: #0284c7; letter-spacing: 0.3px;">🔵 FASE 1 (${fase1Muns.length} Municipios)</strong>
+              <span class="badge" style="background: #0284c7; color: #fff; font-size: 0.75rem;">${totF1Term} / ${totF1Total} Terminadas (${pctF1Global}%)</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem;">
+        `;
+
+        fase1Muns.forEach(m => {
+          const pct = ((m.f1.terminadas / m.f1.total) * 100).toFixed(1);
+          htmlContent += `
+            <div style="background: var(--bg-surface); padding: 0.55rem 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.84rem; color: var(--text-primary);">${escapeHtml(m.name)}</strong>
+                <span class="badge ${parseFloat(pct) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.72rem;">
+                  🟢 ${m.f1.terminadas} / ${m.f1.total} Terminadas (${pct}%)
                 </span>
               </div>
-              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
-                <!-- Fase 1 (Solo si el municipio tiene baterías en Fase 1) -->
-                ${hasF1 ? `
-                <div>
-                  <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
-                    <span style="font-weight: 600; color: #0284c7;">🔵 Fase 1:</span>
-                    <span>${m.f1.terminadas} de ${m.f1.total} terminadas (<strong>${pctF1}%</strong>)</span>
-                  </div>
-                  <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
-                    <div style="height: 100%; width: ${pctF1}%; background: #0284c7; border-radius: 4px; transition: width 0.4s ease;"></div>
-                  </div>
-                </div>` : ''}
-                <!-- Fase 2 (Solo si el municipio tiene baterías en Fase 2) -->
-                ${hasF2 ? `
-                <div>
-                  <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
-                    <span style="font-weight: 600; color: #8b5cf6;">🟣 Fase 2:</span>
-                    <span>${m.f2.terminadas} de ${m.f2.total} terminadas (<strong>${pctF2}%</strong>)</span>
-                  </div>
-                  <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
-                    <div style="height: 100%; width: ${pctF2}%; background: #8b5cf6; border-radius: 4px; transition: width 0.4s ease;"></div>
-                  </div>
-                </div>` : ''}
+              <div style="height: 7px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${pct}%; background: #0284c7; border-radius: 4px; transition: width 0.4s ease;"></div>
               </div>
             </div>
           `;
-        }).join('');
+        });
+        htmlContent += `</div>`;
+
+        // SECCIÓN 2: FASE 2
+        htmlContent += `
+          <div style="margin-bottom: 0.5rem; position: sticky; top: 0; background: var(--bg-surface); z-index: 2; padding: 4px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(139, 92, 246, 0.12); padding: 0.45rem 0.75rem; border-radius: var(--radius-sm); border-left: 4px solid #8b5cf6;">
+              <strong style="font-size: 0.85rem; color: #8b5cf6; letter-spacing: 0.3px;">🟣 FASE 2 (${fase2Muns.length} Municipios)</strong>
+              <span class="badge" style="background: #8b5cf6; color: #fff; font-size: 0.75rem;">${totF2Term} / ${totF2Total} Terminadas (${pctF2Global}%)</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        `;
+
+        fase2Muns.forEach(m => {
+          const pct = ((m.f2.terminadas / m.f2.total) * 100).toFixed(1);
+          htmlContent += `
+            <div style="background: var(--bg-surface); padding: 0.55rem 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.84rem; color: var(--text-primary);">${escapeHtml(m.name)}</strong>
+                <span class="badge ${parseFloat(pct) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.72rem;">
+                  🟢 ${m.f2.terminadas} / ${m.f2.total} Terminadas (${pct}%)
+                </span>
+              </div>
+              <div style="height: 7px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${pct}%; background: #8b5cf6; border-radius: 4px; transition: width 0.4s ease;"></div>
+              </div>
+            </div>
+          `;
+        });
+        htmlContent += `</div>`;
+
+        progressBarsContainer.innerHTML = htmlContent;
       }
     }
 
+    // Dibujar el reporte de barras de progreso directamente en el canvas para exportación nítida (Copiar / Descargar PNG)
     const canvasBalance = document.getElementById('chart-balance-municipios');
-    if (canvasBalance && typeof Chart !== 'undefined') {
-      const ctxBalance = canvasBalance.getContext('2d');
-      if (chartBalanceMunicipios) chartBalanceMunicipios.destroy();
-      const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
-      const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
-      const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
-
-      const labels = sortedMuns.map((m) => m.name);
-      // SOLO TENER EN CUENTA LAS TERMINADAS Y OCULTAR SI EL MUNICIPIO NO TIENE BATERÍAS EN ESA FASE (null)
-      const dataAvgsF1 = sortedMuns.map((m) => m.f1.total > 0 ? parseFloat(((m.f1.terminadas / m.f1.total) * 100).toFixed(2)) : null);
-      const dataAvgsF2 = sortedMuns.map((m) => m.f2.total > 0 ? parseFloat(((m.f2.terminadas / m.f2.total) * 100).toFixed(2)) : null);
-
-      chartBalanceMunicipios = new Chart(ctxBalance, {
-        type: 'bar',
-        data: {
-          labels,
-          datasets: [
-            {
-              label: '🔵 Fase 1 (% Terminadas)',
-              data: dataAvgsF1,
-              backgroundColor: '#0284c7',
-              borderRadius: 3
-            },
-            {
-              label: '🟣 Fase 2 (% Terminadas)',
-              data: dataAvgsF2,
-              backgroundColor: '#8b5cf6',
-              borderRadius: 3
-            }
-          ]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              max: 100,
-              min: 0,
-              ticks: { callback: (v) => v + '%', font: { size: 11 }, color: textColor },
-              grid: { color: gridColor }
-            },
-            y: {
-              ticks: { font: { size: 11, weight: '600' }, color: textColor },
-              grid: { display: false }
-            }
-          },
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: { boxWidth: 12, font: { size: 11, weight: '600' }, color: textColor }
-            },
-            tooltip: {
-              callbacks: {
-                label: (ctx) => {
-                  const m = sortedMuns[ctx.dataIndex];
-                  if (ctx.datasetIndex === 0) {
-                    if (m.f1.total === 0) return null;
-                    const pct = ((m.f1.terminadas / m.f1.total) * 100).toFixed(1);
-                    return ` 🔵 Fase 1: ${m.f1.terminadas} de ${m.f1.total} terminadas (${pct}%)`;
-                  } else {
-                    if (m.f2.total === 0) return null;
-                    const pct = ((m.f2.terminadas / m.f2.total) * 100).toFixed(1);
-                    return ` 🟣 Fase 2: ${m.f2.terminadas} de ${m.f2.total} terminadas (${pct}%)`;
-                  }
-                }
-              }
-            }
-          }
-        }
-      });
+    if (canvasBalance) {
+      if (chartBalanceMunicipios) {
+        chartBalanceMunicipios.destroy();
+        chartBalanceMunicipios = null;
+      }
+      renderProgressBarsReportToCanvas(canvasBalance, fase1Muns, fase2Muns, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global);
     }
 
     // 9. Gráfica 3: Doble Barra por Municipio (Comparativo Fase 1 vs Fase 2)
