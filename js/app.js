@@ -4358,115 +4358,153 @@ function renderReportCharts(total, sinIniciar, ejecucion, terminadas, selectedMu
     });
   }
 
-  // Gráfica 2: Avance por Segmento (Vereda si hay municipio, o Municipio si es general)
+  // Gráfica 2: Balance General (% Baterías Terminadas por Municipio - Fase 1 vs Fase 2)
+  const reportProgressBarsContainer = document.getElementById('report-balance-progress-bars-container');
   const canvasBar = document.getElementById('chart-report-bar');
   const titleEl = document.getElementById('chart-report-bar-title');
-  if (canvasBar && typeof Chart !== 'undefined') {
-    const ctxBar = canvasBar.getContext('2d');
-    if (chartReportBar) chartReportBar.destroy();
-    const isDarkTheme = document.documentElement.getAttribute('data-theme') === 'dark';
-    const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
-    const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
-    let groupingKey = 'municipio';
-    let titleText = '📊 Avance Promedio por Municipio';
+  let groupingKey = 'municipio';
+  let titleText = '📈 Balance: % Baterías Terminadas por Municipio (Fase 1 vs Fase 2)';
 
-    if (selectedMun) {
-      groupingKey = 'vereda';
-      titleText = `📊 Avance Promedio por Vereda (${selectedMun})`;
-    } else if (selectedInsp) {
-      groupingKey = 'vereda';
-      titleText = `📊 Avance por Veredas del Inspector (${selectedInsp})`;
+  if (selectedMun) {
+    groupingKey = 'vereda';
+    titleText = `📈 Balance: % Baterías Terminadas por Vereda (${selectedMun})`;
+  } else if (selectedInsp) {
+    groupingKey = 'vereda';
+    titleText = `📈 Balance: % Baterías Terminadas por Veredas del Inspector (${selectedInsp})`;
+  }
+
+  if (titleEl) titleEl.textContent = titleText;
+
+  // Agrupar datos por la clave con conteo estricto de baterías terminadas y desglose por Fase 1 y Fase 2
+  const groupMap = {};
+  reportFilteredData.forEach((b) => {
+    const k = (b[groupingKey] || 'Sin Definir').trim().toUpperCase();
+    if (!groupMap[k]) {
+      groupMap[k] = {
+        name: k,
+        total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0,
+        f1: { total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0 },
+        f2: { total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0 }
+      };
     }
+    const avance = parseFloat(b.avance) || 0;
+    const faseKey = b.fase === 2 ? 'f2' : 'f1';
 
-    if (titleEl) titleEl.textContent = titleText;
+    groupMap[k].total++;
+    groupMap[k].sum += avance;
+    groupMap[k][faseKey].total++;
+    groupMap[k][faseKey].sum += avance;
 
-    // Agrupar datos por la clave con desglose por Fase 1 y Fase 2
-    const groupMap = {};
-    reportFilteredData.forEach((b) => {
-      const k = b[groupingKey] || 'Sin Definir';
-      if (!groupMap[k]) {
-        groupMap[k] = {
-          total: 0, sum: 0,
-          f1: { total: 0, sum: 0 },
-          f2: { total: 0, sum: 0 }
-        };
+    if (avance >= 99.9) {
+      groupMap[k].terminadas++;
+      groupMap[k][faseKey].terminadas++;
+    } else if (avance > 0) {
+      groupMap[k].ejecucion++;
+      groupMap[k][faseKey].ejecucion++;
+    } else {
+      groupMap[k].sinIniciar++;
+      groupMap[k][faseKey].sinIniciar++;
+    }
+  });
+
+  const allGroupsArr = Object.values(groupMap);
+
+  const fase1Groups = allGroupsArr
+    .filter(g => g.f1.total > 0)
+    .sort((a, b) => (b.f1.terminadas / b.f1.total) - (a.f1.terminadas / a.f1.total) || b.f1.terminadas - a.f1.terminadas || a.name.localeCompare(b.name, 'es'));
+
+  const fase2Groups = allGroupsArr
+    .filter(g => g.f2.total > 0)
+    .sort((a, b) => (b.f2.terminadas / b.f2.total) - (a.f2.terminadas / a.f2.total) || b.f2.terminadas - a.f2.terminadas || a.name.localeCompare(b.name, 'es'));
+
+  const totF1Term = fase1Groups.reduce((acc, g) => acc + g.f1.terminadas, 0);
+  const totF1Total = fase1Groups.reduce((acc, g) => acc + g.f1.total, 0);
+  const pctF1Global = totF1Total > 0 ? ((totF1Term / totF1Total) * 100).toFixed(1) : '0.0';
+
+  const totF2Term = fase2Groups.reduce((acc, g) => acc + g.f2.terminadas, 0);
+  const totF2Total = fase2Groups.reduce((acc, g) => acc + g.f2.total, 0);
+  const pctF2Global = totF2Total > 0 ? ((totF2Term / totF2Total) * 100).toFixed(1) : '0.0';
+
+  if (reportProgressBarsContainer) {
+    if (allGroupsArr.length === 0) {
+      reportProgressBarsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay registros con los filtros seleccionados.</div>';
+    } else {
+      let htmlContent = '';
+
+      // SECCIÓN 1: FASE 1
+      if (fase1Groups.length > 0) {
+        htmlContent += `
+          <div style="margin-bottom: 0.5rem; position: sticky; top: 0; background: var(--bg-surface); z-index: 2; padding: 4px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(2, 132, 199, 0.12); padding: 0.45rem 0.75rem; border-radius: var(--radius-sm); border-left: 4px solid #0284c7;">
+              <strong style="font-size: 0.85rem; color: #0284c7; letter-spacing: 0.3px;">🔵 FASE 1 (${fase1Groups.length} ${groupingKey === 'municipio' ? 'Municipios' : 'Veredas'})</strong>
+              <span class="badge" style="background: #0284c7; color: #fff; font-size: 0.75rem;">${totF1Term} / ${totF1Total} Terminadas (${pctF1Global}%)</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.25rem;">
+        `;
+
+        fase1Groups.forEach(g => {
+          const pct = ((g.f1.terminadas / g.f1.total) * 100).toFixed(1);
+          htmlContent += `
+            <div style="background: var(--bg-surface); padding: 0.55rem 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.84rem; color: var(--text-primary);">${escapeHtml(g.name)}</strong>
+                <span class="badge ${parseFloat(pct) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.72rem;">
+                  🟢 ${g.f1.terminadas} / ${g.f1.total} Terminadas (${pct}%)
+                </span>
+              </div>
+              <div style="height: 7px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${pct}%; background: #0284c7; border-radius: 4px; transition: width 0.4s ease;"></div>
+              </div>
+            </div>
+          `;
+        });
+        htmlContent += `</div>`;
       }
-      const avance = b.avance || 0;
-      const faseKey = b.fase === 2 ? 'f2' : 'f1';
 
-      groupMap[k].total++;
-      groupMap[k].sum += avance;
-      groupMap[k][faseKey].total++;
-      groupMap[k][faseKey].sum += avance;
-    });
+      // SECCIÓN 2: FASE 2
+      if (fase2Groups.length > 0) {
+        htmlContent += `
+          <div style="margin-bottom: 0.5rem; position: sticky; top: 0; background: var(--bg-surface); z-index: 2; padding: 4px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(139, 92, 246, 0.12); padding: 0.45rem 0.75rem; border-radius: var(--radius-sm); border-left: 4px solid #8b5cf6;">
+              <strong style="font-size: 0.85rem; color: #8b5cf6; letter-spacing: 0.3px;">🟣 FASE 2 (${fase2Groups.length} ${groupingKey === 'municipio' ? 'Municipios' : 'Veredas'})</strong>
+              <span class="badge" style="background: #8b5cf6; color: #fff; font-size: 0.75rem;">${totF2Term} / ${totF2Total} Terminadas (${pctF2Global}%)</span>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        `;
 
-    const sortedGroups = Object.entries(groupMap).map(([k, d]) => ({
-      name: k,
-      total: d.total,
-      avg: d.total > 0 ? (d.sum / d.total) : 0,
-      f1: {
-        total: d.f1.total,
-        avg: d.f1.total > 0 ? (d.f1.sum / d.f1.total) : 0
-      },
-      f2: {
-        total: d.f2.total,
-        avg: d.f2.total > 0 ? (d.f2.sum / d.f2.total) : 0
+        fase2Groups.forEach(g => {
+          const pct = ((g.f2.terminadas / g.f2.total) * 100).toFixed(1);
+          htmlContent += `
+            <div style="background: var(--bg-surface); padding: 0.55rem 0.8rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.25rem;">
+                <strong style="font-size: 0.84rem; color: var(--text-primary);">${escapeHtml(g.name)}</strong>
+                <span class="badge ${parseFloat(pct) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.72rem;">
+                  🟢 ${g.f2.terminadas} / ${g.f2.total} Terminadas (${pct}%)
+                </span>
+              </div>
+              <div style="height: 7px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                <div style="height: 100%; width: ${pct}%; background: #8b5cf6; border-radius: 4px; transition: width 0.4s ease;"></div>
+              </div>
+            </div>
+          `;
+        });
+        htmlContent += `</div>`;
       }
-    })).sort((a, b) => b.avg - a.avg).slice(0, 15);
 
-    const labels = sortedGroups.map((g) => g.name);
-    const dataAvgsF1 = sortedGroups.map((g) => parseFloat(g.f1.avg.toFixed(2)));
-    const dataAvgsF2 = sortedGroups.map((g) => parseFloat(g.f2.avg.toFixed(2)));
+      reportProgressBarsContainer.innerHTML = htmlContent;
+    }
+  }
 
-    chartReportBar = new Chart(ctxBar, { plugins: [visibleBarLabelsPlugin],
-      type: 'bar',
-      data: {
-        labels,
-        datasets: [
-          {
-            label: '🔵 Fase 1 (% Avance)',
-            data: dataAvgsF1,
-            backgroundColor: '#0284c7',
-            borderRadius: 3
-          },
-          {
-            label: '🟣 Fase 2 (% Avance)',
-            data: dataAvgsF2,
-            backgroundColor: '#8b5cf6',
-            borderRadius: 3
-          }
-        ]
-      },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        maintainAspectRatio: false,
-        scales: {
-          x: { max: 100, min: 0, ticks: { callback: (v) => v + '%', font: { size: 10 }, color: textColor }, grid: { color: gridColor } },
-          y: { ticks: { font: { size: 11, weight: '600' }, color: textColor }, grid: { display: false } }
-        },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top',
-            labels: { boxWidth: 12, font: { size: 11, weight: '600' }, color: textColor }
-          },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const g = sortedGroups[ctx.dataIndex];
-                if (ctx.datasetIndex === 0) {
-                  return ` 🔵 Fase 1: ${ctx.parsed.x}% (${g.f1.total} baterías)`;
-                } else {
-                  return ` 🟣 Fase 2: ${ctx.parsed.x}% (${g.f2.total} baterías)`;
-                }
-              }
-            }
-          }
-        }
-      }
-    });
+  // Dibujar el reporte en el canvas para que Copiar y Descargar PNG exporten la imagen exacta en alta resolución
+  if (canvasBar) {
+    if (chartReportBar) {
+      chartReportBar.destroy();
+      chartReportBar = null;
+    }
+    renderProgressBarsReportToCanvas(canvasBar, fase1Groups, fase2Groups, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global);
   }
 
   // Gráfica 3 y Grid de las 13 Actividades Constructivas en Reportes

@@ -860,24 +860,28 @@
             </div>
           </div>
 
-          <!-- Gráfica 2: Avance Promedio Comparativo por Segmento -->
+          <!-- Gráfica 2: Balance General (% Baterías Terminadas por Municipio - Fase 1 vs Fase 2) -->
           <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
-              <h3 id="chart-report-bar-title">📊 Avance por Municipio / Vereda (Fase 1 vs Fase 2)</h3>
+              <h3 id="chart-report-bar-title">📈 Balance: % Baterías Terminadas por Municipio (Fase 1 vs Fase 2)</h3>
               <div style="display: flex; gap: 0.35rem;">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="copyChartImage('chart-report-bar', 'Avance por Segmento')" title="Copiar al portapapeles" style="font-size: 0.75rem; padding: 3px 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="copyChartImage('chart-report-bar', 'Balance Baterías Terminadas Reportes')" title="Copiar al portapapeles" style="font-size: 0.75rem; padding: 3px 8px;">
                   📋 Copiar
                 </button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-bar', 'avance_segmentos_filtrados')" title="Descargar PNG" style="font-size: 0.75rem; padding: 3px 8px;">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="downloadChartImage('chart-report-bar', 'balance_baterias_terminadas_reportes')" title="Descargar PNG" style="font-size: 0.75rem; padding: 3px 8px;">
                   📥 PNG
                 </button>
-                <button type="button" class="btn btn-sm" onclick="exportExcelReporteSegmentos()" title="Exportar avance a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
+                <button type="button" class="btn btn-sm" onclick="exportExcelReporteSegmentos()" title="Exportar balance a Excel" style="font-size: 0.75rem; padding: 3px 8px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 3px;">
                   📊 Excel
                 </button>
               </div>
             </div>
             <div class="card-body" style="padding: 1rem; min-height: 270px;">
-              <div style="position: relative; width: 100%; height: 250px;">
+              <!-- Barras de Progreso (Solo Baterías Terminadas) -->
+              <div id="report-balance-progress-bars-container" style="max-height: 270px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 0.65rem;">
+                <div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">Cargando progreso de terminadas...</div>
+              </div>
+              <div style="position: relative; width: 100%; height: 0; overflow: hidden; opacity: 0;">
                 <canvas id="chart-report-bar"></canvas>
               </div>
             </div>
