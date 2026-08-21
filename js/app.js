@@ -2798,7 +2798,53 @@ async function renderExecutiveDashboard() {
       });
     }
 
-    // 8. Gráfica 2: Balance General (% Avance por Municipio Comparativo Fase 1 vs Fase 2)
+    // 8. Gráfica 2 & Barras de Progreso: Balance General (% Baterías Terminadas por Municipio Comparativo Fase 1 vs Fase 2)
+    const progressBarsContainer = document.getElementById('balance-progress-bars-container');
+    if (progressBarsContainer) {
+      if (sortedMuns.length === 0) {
+        progressBarsContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1.5rem;">No hay datos registrados aún.</div>';
+      } else {
+        progressBarsContainer.innerHTML = sortedMuns.map(m => {
+          const pctF1 = m.f1.total > 0 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
+          const pctF2 = m.f2.total > 0 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
+          const pctTotal = m.total > 0 ? ((m.terminadas / m.total) * 100).toFixed(1) : '0.0';
+
+          return `
+            <div style="background: var(--bg-surface); padding: 0.65rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                <strong style="font-size: 0.88rem; color: var(--text-primary);">${escapeHtml(m.name)}</strong>
+                <span class="badge ${parseFloat(pctTotal) >= 99.9 ? 'badge-status-terminado' : 'badge-status-ejecucion'}" style="font-size: 0.75rem;">
+                  🟢 ${m.terminadas} / ${m.total} Terminadas (${pctTotal}%)
+                </span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                <!-- Fase 1 -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
+                    <span style="font-weight: 600; color: #0284c7;">🔵 Fase 1:</span>
+                    <span>${m.f1.terminadas} de ${m.f1.total} terminadas (<strong>${pctF1}%</strong>)</span>
+                  </div>
+                  <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                    <div style="height: 100%; width: ${pctF1}%; background: #0284c7; border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+                <!-- Fase 2 -->
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px;">
+                    <span style="font-weight: 600; color: #8b5cf6;">🟣 Fase 2:</span>
+                    <span>${m.f2.terminadas} de ${m.f2.total} terminadas (<strong>${pctF2}%</strong>)</span>
+                  </div>
+                  <div style="height: 6px; background: rgba(125,125,125,0.15); border-radius: 4px; overflow: hidden;">
+                    <div style="height: 100%; width: ${pctF2}%; background: #8b5cf6; border-radius: 4px; transition: width 0.4s ease;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+
     const canvasBalance = document.getElementById('chart-balance-municipios');
     if (canvasBalance && typeof Chart !== 'undefined') {
       const ctxBalance = canvasBalance.getContext('2d');
@@ -2808,8 +2854,9 @@ async function renderExecutiveDashboard() {
       const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
       const labels = sortedMuns.map((m) => m.name);
-      const dataAvgsF1 = sortedMuns.map((m) => parseFloat(m.f1.avg.toFixed(2)));
-      const dataAvgsF2 = sortedMuns.map((m) => parseFloat(m.f2.avg.toFixed(2)));
+      // SOLO TENER EN CUENTA LAS TERMINADAS
+      const dataAvgsF1 = sortedMuns.map((m) => m.f1.total > 0 ? parseFloat(((m.f1.terminadas / m.f1.total) * 100).toFixed(2)) : 0);
+      const dataAvgsF2 = sortedMuns.map((m) => m.f2.total > 0 ? parseFloat(((m.f2.terminadas / m.f2.total) * 100).toFixed(2)) : 0);
 
       chartBalanceMunicipios = new Chart(ctxBalance, {
         type: 'bar',
@@ -2817,13 +2864,13 @@ async function renderExecutiveDashboard() {
           labels,
           datasets: [
             {
-              label: '🔵 Fase 1 (% Avance)',
+              label: '🔵 Fase 1 (% Terminadas)',
               data: dataAvgsF1,
               backgroundColor: '#0284c7',
               borderRadius: 3
             },
             {
-              label: '🟣 Fase 2 (% Avance)',
+              label: '🟣 Fase 2 (% Terminadas)',
               data: dataAvgsF2,
               backgroundColor: '#8b5cf6',
               borderRadius: 3
@@ -2856,9 +2903,11 @@ async function renderExecutiveDashboard() {
                 label: (ctx) => {
                   const m = sortedMuns[ctx.dataIndex];
                   if (ctx.datasetIndex === 0) {
-                    return ` 🔵 Fase 1: ${ctx.parsed.x}% (${m.f1.total} baterías)`;
+                    const pct = m.f1.total > 0 ? ((m.f1.terminadas / m.f1.total) * 100).toFixed(1) : '0.0';
+                    return ` 🔵 Fase 1: ${m.f1.terminadas} de ${m.f1.total} terminadas (${pct}%)`;
                   } else {
-                    return ` 🟣 Fase 2: ${ctx.parsed.x}% (${m.f2.total} baterías)`;
+                    const pct = m.f2.total > 0 ? ((m.f2.terminadas / m.f2.total) * 100).toFixed(1) : '0.0';
+                    return ` 🟣 Fase 2: ${m.f2.terminadas} de ${m.f2.total} terminadas (${pct}%)`;
                   }
                 }
               }
