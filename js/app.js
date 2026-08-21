@@ -2619,16 +2619,29 @@ async function renderExecutiveDashboard() {
       }
     });
 
-    // 4. Calcular métricas globales y agrupadas por municipio sobre el universo total (1399) con desglose por Fase 1 y Fase 2
+    // 4. Inicializar y calcular métricas sobre los 15 municipios y el universo total (1399) con desglose por Fase 1 y Fase 2
     let globalSinIniciar = 0;
     let globalEjecucion = 0;
     let globalTerminadas = 0;
     let sumProgress = 0;
 
+    const allMunsList = typeof window.dbManager.getMunicipios === 'function' ? await window.dbManager.getMunicipios() : [];
     const munMap = {};
 
+    // Precargar todos los municipios oficiales para garantizar que aparezcan los 15
+    (allMunsList || []).forEach(m => {
+      const name = (m.nombre || '').trim().toUpperCase();
+      if (name) {
+        munMap[name] = {
+          total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0,
+          f1: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 },
+          f2: { total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0 }
+        };
+      }
+    });
+
     (allBeneficiarios || []).forEach((b) => {
-      const mun = b.municipio || 'SIN MUNICIPIO';
+      const mun = (b.municipio || 'SIN MUNICIPIO').trim().toUpperCase();
       if (!munMap[mun]) {
         munMap[mun] = {
           total: 0, sinIniciar: 0, ejecucion: 0, terminadas: 0, sumProgress: 0,
@@ -2710,7 +2723,7 @@ async function renderExecutiveDashboard() {
         terminadas: d.f2.terminadas,
         avg: d.f2.total > 0 ? (d.f2.sumProgress / d.f2.total) : 0
       }
-    })).sort((a, b) => b.terminadas - a.terminadas || b.avg - a.avg || b.ejecucion - a.ejecucion);
+    })).filter(m => m.total > 0).sort((a, b) => b.terminadas - a.terminadas || b.avg - a.avg || a.name.localeCompare(b.name, 'es'));
 
     const podioContainer = document.getElementById('dash-podio-container');
     if (podioContainer) {
