@@ -25,23 +25,12 @@ const dbConfig = {
   queueLimit: 0
 };
 
-let pool = null;
+const pool = mysql.createPool(dbConfig);
 
 // Inicialización de la base de datos MySQL con roles, permisos y usuarios
 async function initMySQL() {
   try {
-    // 1. Crear base de datos 'bateria' si no existe
-    const initialConn = await mysql.createConnection({
-      host: dbConfig.host,
-      user: dbConfig.user,
-      password: dbConfig.password
-    });
-    await initialConn.query(`CREATE DATABASE IF NOT EXISTS \`${dbConfig.database}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`);
-    await initialConn.end();
-
-    // 2. Pool a la base de datos 'bateria'
-    pool = mysql.createPool(dbConfig);
-    console.log(`✓ Conectado exitosamente a MySQL (Base de datos: ${dbConfig.database})`);
+    console.log(`✓ Conectando a MySQL (Base de datos: ${dbConfig.database})...`);
 
     // 4. Crear tabla 'roles'
     await pool.query(`
