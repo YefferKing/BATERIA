@@ -3694,19 +3694,45 @@ async function renderExecutiveDashboard() {
       const textColor = isDarkTheme ? '#cbd5e1' : '#475569';
       const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
-      // Ordenar primero todos los de Fase 1, luego los que tienen ambas fases, y finalmente los de Fase 2
-      const f1Only = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total === 0).sort((a, b) => b.f1.total - a.f1.total || a.name.localeCompare(b.name, 'es'));
-      const fBoth = sortedMuns.filter(m => m.f1.total > 0 && m.f2.total > 0).sort((a, b) => a.name.localeCompare(b.name, 'es'));
-      const f2Only = sortedMuns.filter(m => m.f2.total > 0 && m.f1.total === 0).sort((a, b) => b.f2.total - a.f2.total || a.name.localeCompare(b.name, 'es'));
-      const stackedMunsOrdered = [...f1Only, ...fBoth, ...f2Only];
+      // Generar elementos separados e independientes para Fase 1 y Fase 2 (San Calixto separado por fase)
+      const f1Items = sortedMuns
+        .filter(m => m.f1.total > 0)
+        .sort((a, b) => b.f1.total - a.f1.total || a.name.localeCompare(b.name, 'es'))
+        .map(m => ({
+          label: m.name === 'SAN CALIXTO' ? 'SAN CALIXTO (F1)' : m.name,
+          municipioOriginal: m.name,
+          fase: 1,
+          total: m.f1.total,
+          terminadas: m.f1.terminadas,
+          ejecucion: m.f1.ejecucion,
+          sinIniciar: m.f1.sinIniciar,
+          avg: m.f1.avg
+        }));
 
-      const labels = stackedMunsOrdered.map((m) => m.name);
-      const dataF1 = stackedMunsOrdered.map((m) => m.f1.total > 0 ? m.f1.total : null);
-      const dataF2 = stackedMunsOrdered.map((m) => m.f2.total > 0 ? m.f2.total : null);
+      const f2Items = sortedMuns
+        .filter(m => m.f2.total > 0)
+        .sort((a, b) => b.f2.total - a.f2.total || a.name.localeCompare(b.name, 'es'))
+        .map(m => ({
+          label: m.name === 'SAN CALIXTO' ? 'SAN CALIXTO (F2)' : m.name,
+          municipioOriginal: m.name,
+          fase: 2,
+          total: m.f2.total,
+          terminadas: m.f2.terminadas,
+          ejecucion: m.f2.ejecucion,
+          sinIniciar: m.f2.sinIniciar,
+          avg: m.f2.avg
+        }));
 
-      // Etiquetas visibles directamente sobre las barras: Cantidad y Porcentaje de Avance
-      const customLabelsF1 = stackedMunsOrdered.map((m) => m.f1.total > 0 ? `${m.f1.total} (${m.f1.avg.toFixed(1)}%)` : '');
-      const customLabelsF2 = stackedMunsOrdered.map((m) => m.f2.total > 0 ? `${m.f2.total} (${m.f2.avg.toFixed(1)}%)` : '');
+      const allItems = [...f1Items, ...f2Items];
+      const labels = allItems.map(it => it.label);
+
+      // Dataset 1: Fase 1 (solo llena los índices de Fase 1)
+      const dataF1 = allItems.map(it => it.fase === 1 ? it.total : null);
+      const customLabelsF1 = allItems.map(it => it.fase === 1 ? `${it.total} (${it.avg.toFixed(1)}%)` : '');
+
+      // Dataset 2: Fase 2 (solo llena los índices de Fase 2)
+      const dataF2 = allItems.map(it => it.fase === 2 ? it.total : null);
+      const customLabelsF2 = allItems.map(it => it.fase === 2 ? `${it.total} (${it.avg.toFixed(1)}%)` : '');
 
       chartMunicipiosStacked = new Chart(ctxStacked, {
         type: 'bar',
@@ -3752,16 +3778,14 @@ async function renderExecutiveDashboard() {
             tooltip: {
               callbacks: {
                 label: (ctx) => {
-                  const m = stackedMunsOrdered[ctx.dataIndex];
-                  const faseInfo = ctx.datasetIndex === 0 ? m.f1 : m.f2;
-                  const labelPrefix = ctx.datasetIndex === 0 ? '🔵 Fase 1' : '🟣 Fase 2';
-                  if (faseInfo.total === 0) return null;
+                  const it = allItems[ctx.dataIndex];
+                  const labelPrefix = it.fase === 1 ? '🔵 Fase 1' : '🟣 Fase 2';
                   return [
-                    ` ${labelPrefix}: ${faseInfo.total} baterías`,
-                    `   📈 Avance Promedio: ${faseInfo.avg.toFixed(1)}%`,
-                    `   🟢 Terminadas: ${faseInfo.terminadas}`,
-                    `   🟠 En Ejecución: ${faseInfo.ejecucion}`,
-                    `   ⚪ Sin Iniciar: ${faseInfo.sinIniciar}`
+                    ` ${labelPrefix} - ${it.label}: ${it.total} baterías`,
+                    `   📈 Avance Promedio: ${it.avg.toFixed(1)}%`,
+                    `   🟢 Terminadas: ${it.terminadas}`,
+                    `   🟠 En Ejecución: ${it.ejecucion}`,
+                    `   ⚪ Sin Iniciar: ${it.sinIniciar}`
                   ];
                 }
               }
