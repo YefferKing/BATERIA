@@ -434,6 +434,32 @@ app.put('/api/usuarios/:id', async (req, res) => {
   }
 });
 
+// 5.1 Eliminar usuario
+app.delete('/api/usuarios/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = parseInt(id, 10);
+
+    // Proteger al Administrador Principal
+    if (userId === 1) {
+      return res.status(403).json({ ok: false, error: 'No es posible eliminar al Administrador Principal del sistema' });
+    }
+
+    const [user] = await pool.query('SELECT usuario FROM usuarios WHERE id = ?', [userId]);
+    if (user.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+    }
+    if (user[0].usuario === 'admin') {
+      return res.status(403).json({ ok: false, error: 'No es posible eliminar la cuenta admin' });
+    }
+
+    await pool.query('DELETE FROM usuarios WHERE id = ?', [userId]);
+    res.json({ ok: true, mensaje: 'Usuario eliminado exitosamente' });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // 6. Obtener lista de todos los permisos disponibles
 app.get('/api/permisos', async (req, res) => {
   try {
@@ -697,6 +723,15 @@ app.post('/api/beneficiarios', async (req, res) => {
       return res.status(400).json({ ok: false, error: 'Todos los campos obligatorios deben ser diligenciados' });
     }
 
+    // Validar límite contractual de 1399 beneficiarios
+    const [totalCountRows] = await pool.query('SELECT COUNT(*) as count FROM beneficiarios');
+    if (totalCountRows[0].count >= 1399) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Se ha alcanzado el límite máximo contractual de 1.399 beneficiarios. No se pueden registrar más beneficiarios.'
+      });
+    }
+
     // Verificar si ya existe un beneficiario con el mismo documento
     const [existing] = await pool.query(
       'SELECT id, nombre FROM beneficiarios WHERE documento = ? LIMIT 1',
@@ -745,6 +780,22 @@ app.post('/api/beneficiarios', async (req, res) => {
       mensaje: 'Beneficiario registrado exitosamente en el sistema',
       data: newRows[0]
     });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 14.2 Eliminar un Beneficiario
+app.delete('/api/beneficiarios/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [ben] = await pool.query('SELECT id, nombre, documento FROM beneficiarios WHERE id = ?', [id]);
+    if (ben.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Beneficiario no encontrado' });
+    }
+
+    await pool.query('DELETE FROM beneficiarios WHERE id = ?', [id]);
+    res.json({ ok: true, mensaje: `Beneficiario ${ben[0].nombre} eliminado correctamente` });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }
@@ -1108,6 +1159,22 @@ app.get('/api/inspecciones/:id', async (req, res) => {
         detalles
       }
     });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+// 21.1 Eliminar Inspección de Campo
+app.delete('/api/inspecciones/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const [insp] = await pool.query('SELECT id, beneficiario_id FROM inspecciones WHERE id = ?', [id]);
+    if (insp.length === 0) {
+      return res.status(404).json({ ok: false, error: 'Inspección no encontrada' });
+    }
+
+    await pool.query('DELETE FROM inspecciones WHERE id = ?', [id]);
+    res.json({ ok: true, mensaje: 'Inspección de campo eliminada exitosamente' });
   } catch (err) {
     res.status(500).json({ ok: false, error: err.message });
   }

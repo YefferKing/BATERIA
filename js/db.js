@@ -334,6 +334,34 @@ class DatabaseManager {
     return user;
   }
 
+  async deleteUser(userId) {
+    const id = parseInt(userId, 10);
+    // 1. Eliminar de IndexedDB local
+    await new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction('usuarios', 'readwrite');
+        const store = tx.objectStore('usuarios');
+        const req = store.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      } catch (e) {
+        resolve(true);
+      }
+    });
+
+    // 2. Si hay conexión con MySQL, sincronizar eliminación
+    if (navigator.onLine) {
+      const res = await fetch(`${API_URL}/usuarios/${id}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Error al eliminar usuario del servidor');
+      }
+    }
+    return true;
+  }
+
   async saveSession(user) {
     return new Promise((resolve) => {
       const tx = this.db.transaction('config', 'readwrite');
@@ -506,6 +534,34 @@ class DatabaseManager {
       req.onsuccess = () => resolve(createdRecord);
       req.onerror = () => reject(req.error);
     });
+  }
+
+  async deleteBeneficiario(beneficiarioId) {
+    const id = parseInt(beneficiarioId, 10);
+    // 1. Eliminar en IndexedDB local
+    await new Promise((resolve, reject) => {
+      try {
+        const tx = this.db.transaction('beneficiarios', 'readwrite');
+        const store = tx.objectStore('beneficiarios');
+        const req = store.delete(id);
+        req.onsuccess = () => resolve(true);
+        req.onerror = () => reject(req.error);
+      } catch (e) {
+        resolve(true);
+      }
+    });
+
+    // 2. Si hay conexión con MySQL, sincronizar eliminación
+    if (navigator.onLine) {
+      const res = await fetch(`${API_URL}/beneficiarios/${id}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Error al eliminar beneficiario del servidor');
+      }
+    }
+    return true;
   }
 
   async getActividades() {
@@ -789,6 +845,46 @@ class DatabaseManager {
         reject(err);
       }
     });
+  }
+
+  async deleteInspeccion(inspeccionId) {
+    const id = parseInt(inspeccionId, 10);
+    // 1. Eliminar en IndexedDB local (inspección y detalles)
+    await new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction(['inspecciones', 'inspeccion_detalles'], 'readwrite');
+        const inspStore = tx.objectStore('inspecciones');
+        const detStore = tx.objectStore('inspeccion_detalles');
+
+        inspStore.delete(id);
+
+        const detIdx = detStore.index('inspeccion_id');
+        const reqAll = detIdx.getAll(id);
+        reqAll.onsuccess = () => {
+          const items = reqAll.result || [];
+          for (const item of items) {
+            if (item.id) detStore.delete(item.id);
+          }
+        };
+
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(true);
+      } catch (e) {
+        resolve(true);
+      }
+    });
+
+    // 2. Si hay conexión con MySQL, sincronizar eliminación
+    if (navigator.onLine) {
+      const res = await fetch(`${API_URL}/inspecciones/${id}`, {
+        method: 'DELETE'
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error || 'Error al eliminar inspección del servidor');
+      }
+    }
+    return true;
   }
 
   // Obtener total de inspecciones pendientes de sincronizar

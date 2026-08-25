@@ -902,7 +902,9 @@ window.selectBeneficiaryForInspection = async function (beneficiarioId) {
   for (const act of activitiesList) {
     const prev = previousScores[act.id];
     const isRated = Boolean(hasPreviousVisits && prev !== undefined);
-    const pct = isRated ? prev.porcentaje : null;
+    const prevPct = isRated ? (parseInt(prev.porcentaje, 10) || 0) : 0;
+    const minPct = isRated ? prevPct : 0;
+    const pct = isRated ? prevPct : null;
     const statusObj = pct !== null ? window.dbManager.calculateActivityStatus(pct) : null;
 
     currentActivitiesScores[act.id] = {
@@ -911,6 +913,8 @@ window.selectBeneficiaryForInspection = async function (beneficiarioId) {
       orden: act.orden,
       peso: parseFloat(act.peso_porcentual) || 7.69,
       porcentaje: pct,
+      minPorcentaje: minPct,
+      hasPrevVisit: isRated,
       isRated: isRated,
       estado: statusObj ? statusObj.key : 'PENDIENTE',
       observacion: prev ? prev.observacion : ''
@@ -937,9 +941,10 @@ function renderActivitiesGrid() {
 
   container.innerHTML = activitiesList
     .map((act) => {
-      const score = currentActivitiesScores[act.id] || { isRated: false, porcentaje: null, peso: 7.69, observacion: '' };
+      const score = currentActivitiesScores[act.id] || { isRated: false, porcentaje: null, minPorcentaje: 0, peso: 7.69, observacion: '' };
       const isRated = score.isRated && score.porcentaje !== null;
       const currentPct = isRated ? score.porcentaje : null;
+      const minPct = score.minPorcentaje || 0;
       const statusObj = isRated ? window.dbManager.calculateActivityStatus(currentPct) : null;
 
       const badgeHtml = isRated
@@ -950,6 +955,12 @@ function renderActivitiesGrid() {
             ⚠️ Pendiente por calificar
           </span>`;
 
+      const prevNoticeHtml = (score.hasPrevVisit && minPct > 0)
+        ? `<div style="font-size: 0.72rem; color: #0284c7; margin-top: 3px; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+            🔒 Avance previo: ${minPct}% (bloqueado retroceso)
+          </div>`
+        : '';
+
       return `
         <div class="activity-card" id="act-card-${act.id}">
           <div>
@@ -957,6 +968,7 @@ function renderActivitiesGrid() {
               <div>
                 <div class="activity-title">${act.orden}. ${escapeHtml(act.nombre)}</div>
                 <div class="activity-weight-badge">Ponderación: ${Number(act.peso_porcentual).toFixed(3)}%</div>
+                ${prevNoticeHtml}
               </div>
               ${badgeHtml}
             </div>
@@ -965,10 +977,14 @@ function renderActivitiesGrid() {
             <div class="pct-pill-group" id="pct-group-${act.id}">
               ${percentages
                 .map((pct) => {
+                  const isLocked = minPct > 0 && pct < minPct;
                   const isActive = isRated && currentPct === pct ? `active-${pct}` : '';
+                  const disabledAttr = isLocked ? 'disabled' : '';
+                  const lockedStyle = isLocked ? 'opacity: 0.32; cursor: not-allowed; text-decoration: line-through; background: #e2e8f0; color: #94a3b8;' : '';
+                  const lockedTitle = isLocked ? `title="Bloqueado: El avance consolidado en la última visita fue ${minPct}%. No es posible retroceder."` : '';
                   return `
-                    <button type="button" class="pct-pill-btn ${isActive}" onclick="setActivityScore(${act.id}, ${pct})">
-                      ${pct}%
+                    <button type="button" class="pct-pill-btn ${isActive}" ${disabledAttr} ${lockedTitle} style="${lockedStyle}" onclick="setActivityScore(${act.id}, ${pct})">
+                      ${isLocked ? '🔒 ' : ''}${pct}%
                     </button>
                   `;
                 })
@@ -987,13 +1003,20 @@ function renderActivitiesGrid() {
 }
 
 window.setActivityScore = function (actividadId, percentage) {
-  if (!currentActivitiesScores[actividadId]) return;
+  const item = currentActivitiesScores[actividadId];
+  if (!item) return;
 
-  currentActivitiesScores[actividadId].porcentaje = percentage;
-  currentActivitiesScores[actividadId].isRated = true;
+  const minPct = item.minPorcentaje || 0;
+  if (minPct > 0 && percentage < minPct) {
+    showToast(`⚠️ No es posible disminuir el avance de "${item.nombre}". La visita previa ya consolidó un ${minPct}%.`, 'warning');
+    return;
+  }
+
+  item.porcentaje = percentage;
+  item.isRated = true;
 
   const statusObj = window.dbManager.calculateActivityStatus(percentage);
-  currentActivitiesScores[actividadId].estado = statusObj.key;
+  item.estado = statusObj.key;
 
   // Quitar borde de alerta si existía
   const cardEl = document.getElementById(`act-card-${actividadId}`);
@@ -1027,10 +1050,22 @@ window.setActivityScore = function (actividadId, percentage) {
 };
 
 window.setAllActivitiesScore = function (percentage) {
+  let adjustedCount = 0;
   for (const act of activitiesList) {
-    setActivityScore(act.id, percentage);
+    const item = currentActivitiesScores[act.id];
+    const minPct = item ? (item.minPorcentaje || 0) : 0;
+    if (minPct > percentage) {
+      setActivityScore(act.id, minPct);
+      adjustedCount++;
+    } else {
+      setActivityScore(act.id, percentage);
+    }
   }
-  showToast(`Todas las 13 actividades calificadas en ${percentage}%.`, 'info');
+  if (adjustedCount > 0) {
+    showToast(`Actividades calificadas en ${percentage}%. ${adjustedCount} actividad(es) conservaron su avance previo superior.`, 'info');
+  } else {
+    showToast(`Todas las 13 actividades calificadas en ${percentage}%.`, 'info');
+  }
 };
 
 window.setActivityObservation = function (actividadId, text) {
@@ -1649,8 +1684,11 @@ function renderInspeccionesTable() {
             ${fotosArr && fotosArr.length > 0 ? `📷 <strong>${fotosArr.length}</strong> foto(s)` : `<span style="color: var(--text-muted);">—</span>`}
           </td>
           <td style="text-align: center; white-space: nowrap;">
-            <button class="btn btn-secondary btn-sm" onclick="openInspectionDetailAdmin(${item.id})" style="font-size: 0.78rem; padding: 4px 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="openInspectionDetailAdmin(${item.id})" style="font-size: 0.78rem; padding: 4px 8px;" title="Ver Detalle">
               👁️ Ver Detalle
+            </button>
+            <button class="btn btn-sm" onclick="deleteInspectionAdmin(${item.id}, '${escapeHtml((item.beneficiario_nombre || '').replace(/'/g, "\\'"))}')" style="font-size: 0.78rem; padding: 4px 8px; margin-left: 4px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px;" title="Eliminar Inspección">
+              🗑️ Eliminar
             </button>
           </td>
         </tr>
@@ -1715,6 +1753,25 @@ function renderInspeccionesPagination(totalPages) {
 window.changeInspeccionesPage = function (newPage) {
   currentInspAdminPage = newPage;
   renderInspeccionesTable();
+};
+
+window.deleteInspectionAdmin = async function (inspeccionId, benNombre) {
+  const label = benNombre ? ` de "${benNombre}"` : '';
+  if (!confirm(`¿Estás seguro de que deseas eliminar la visita de inspección #${inspeccionId}${label}?\n\nEsta acción eliminará el registro fotográfico y los porcentajes de esta visita.`)) {
+    return;
+  }
+
+  try {
+    await window.dbManager.deleteInspeccion(inspeccionId);
+    inspeccionesAdminData = inspeccionesAdminData.filter((i) => i.id !== inspeccionId);
+    inspeccionesAdminFiltered = inspeccionesAdminFiltered.filter((i) => i.id !== inspeccionId);
+
+    updateInspeccionesAdminKpis();
+    renderInspeccionesTable();
+    showToast(`Visita de inspección #${inspeccionId} eliminada correctamente.`, 'success');
+  } catch (err) {
+    showToast('Error al eliminar la inspección: ' + err.message, 'danger');
+  }
 };
 
 let activeInspectionDetailData = null;
@@ -6043,6 +6100,9 @@ function renderInspectorsPage() {
               : `<div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 3px;">📍 Sin zona asignada</div>`
           ) : '';
 
+          const isCurrentSessionUser = currentUser && currentUser.id === insp.id;
+          const canDeleteThisUser = canManageInspectors && !isAdmin && !isCurrentSessionUser;
+
           const actionBtnHtml = canOpenEditModal ? `
             <div style="display: flex; gap: 0.35rem; align-items: center;">
               <button class="btn btn-secondary btn-sm" onclick="openEditInspectorModal(${insp.id})" style="padding: 3px 8px; font-size: 0.75rem;">
@@ -6051,6 +6111,11 @@ function renderInspectorsPage() {
               ${!isAdmin ? `
                 <button class="btn btn-primary btn-sm" onclick="openAssignInspectorZonesModal(${insp.id})" style="padding: 3px 8px; font-size: 0.75rem;">
                   📍 Zonas
+                </button>
+              ` : ''}
+              ${canDeleteThisUser ? `
+                <button class="btn btn-sm" onclick="deleteInspectorAction(${insp.id}, '${escapeHtml(insp.nombre.replace(/'/g, "\\'"))}')" style="padding: 3px 8px; font-size: 0.75rem; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px;" title="Eliminar Usuario">
+                  🗑️
                 </button>
               ` : ''}
             </div>
@@ -6148,6 +6213,48 @@ function renderInspectorsPage() {
   }
 }
 
+window.deleteInspectorAction = async function (id, nombre) {
+  const currentUser = window.authService.getCurrentUser();
+  const isSuperAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol_id === 1);
+  const canManageInspectors = window.authService.hasPermission('GESTIONAR_INSPECTORES') || isSuperAdmin;
+
+  if (!canManageInspectors) {
+    showToast('No tienes permiso para eliminar usuarios.', 'danger');
+    return;
+  }
+
+  if (id === 1) {
+    showToast('No es posible eliminar al Administrador Principal.', 'warning');
+    return;
+  }
+
+  if (currentUser && currentUser.id === id) {
+    showToast('No puedes eliminar tu propio usuario en sesión activa.', 'warning');
+    return;
+  }
+
+  if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente al usuario "${nombre}"?\n\nEsta acción revocará su acceso y eliminará sus asignaciones.`)) {
+    return;
+  }
+
+  try {
+    await window.dbManager.deleteUser(id);
+    inspectorsData = inspectorsData.filter((u) => u.id !== id);
+    inspectorsFiltered = inspectorsFiltered.filter((u) => u.id !== id);
+
+    const totalInspectoresEl = document.getElementById('stat-total-inspectores');
+    if (totalInspectoresEl) totalInspectoresEl.textContent = inspectorsData.length;
+
+    const inspectoresActivosEl = document.getElementById('stat-inspectores-activos');
+    if (inspectoresActivosEl) inspectoresActivosEl.textContent = inspectorsData.filter((i) => i.activo == 1 || i.activo === true).length;
+
+    renderInspectorsPage();
+    showToast(`Usuario "${nombre}" eliminado exitosamente.`, 'success');
+  } catch (err) {
+    showToast('Error al eliminar usuario: ' + err.message, 'danger');
+  }
+};
+
 window.changeInspectorPage = function (newPage) {
   currentInspectorPage = newPage;
   renderInspectorsPage();
@@ -6210,6 +6317,7 @@ async function loadBeneficiariosDashboard() {
     const fallEl = document.getElementById('stat-beneficiarios-fallecidos') || document.getElementById('dash-stat-fallecidos');
     if (fallEl) fallEl.textContent = Number(beneficiariosData.filter((b) => b.estado == 0).length).toLocaleString('es-CO');
 
+    updateBeneficiarioLimitUI();
     currentBenPage = 1;
     renderBeneficiariosPage();
   } catch (err) {
@@ -6318,11 +6426,14 @@ function renderBeneficiariosPage() {
               </span>
             </td>
             <td style="text-align: center; white-space: nowrap;">
-              <button class="btn btn-secondary btn-sm" onclick="openEditBeneficiarioModal(${b.id})" style="padding: 3px 8px; font-size: 0.75rem;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditBeneficiarioModal(${b.id})" style="padding: 3px 8px; font-size: 0.75rem;" title="Editar Beneficiario">
                 ✏️ Editar
               </button>
               <button class="btn btn-sm" onclick="openFichaTecnicaForBeneficiario(${b.id})" style="padding: 3px 8px; font-size: 0.75rem; margin-left: 4px; color: #ffffff; background: #dc2626; border: 1px solid #b91c1c; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;" title="Ver y descargar Ficha Técnica PDF">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v4zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg> Ficha Técnica
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v4zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg> Ficha
+              </button>
+              <button class="btn btn-sm" onclick="deleteBeneficiarioAction(${b.id}, '${escapeHtml((b.nombre || '').replace(/'/g, "\\'"))}', '${escapeHtml(b.documento || '')}')" style="padding: 3px 8px; font-size: 0.75rem; margin-left: 4px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px;" title="Eliminar Beneficiario">
+                🗑️
               </button>
             </td>
           </tr>
@@ -6435,7 +6546,36 @@ window.onEditBenMunicipioChange = function () {
   populateEditBenVeredas(munId);
 };
 
+window.updateBeneficiarioLimitUI = function () {
+  const btnNewBen = document.querySelector('.btn-new-ben');
+  const count = (beneficiariosData || []).length;
+  const isLimitReached = count >= 1399;
+
+  if (btnNewBen) {
+    if (isLimitReached) {
+      btnNewBen.disabled = true;
+      btnNewBen.classList.add('disabled');
+      btnNewBen.style.opacity = '0.55';
+      btnNewBen.style.cursor = 'not-allowed';
+      btnNewBen.title = 'Límite máximo contractual alcanzado (1.399 / 1.399 beneficiarios)';
+      btnNewBen.innerHTML = '🔒 Límite Alcanzado (1.399 / 1.399)';
+    } else {
+      btnNewBen.disabled = false;
+      btnNewBen.classList.remove('disabled');
+      btnNewBen.style.opacity = '1';
+      btnNewBen.style.cursor = 'pointer';
+      btnNewBen.title = `Registrar nuevo beneficiario (${count} / 1.399)`;
+      btnNewBen.innerHTML = `+ Nuevo Beneficiario (${count}/1.399)`;
+    }
+  }
+};
+
 window.openCreateBeneficiarioModal = function () {
+  if (beneficiariosData && beneficiariosData.length >= 1399) {
+    showToast('⚠️ Se ha alcanzado el límite contractual máximo de 1.399 beneficiarios. No se pueden registrar más.', 'warning');
+    return;
+  }
+
   const form = document.getElementById('form-create-beneficiario');
   if (form) form.reset();
 
@@ -6453,6 +6593,34 @@ window.openCreateBeneficiarioModal = function () {
   }
 
   document.getElementById('modal-create-beneficiario').classList.add('active');
+};
+
+window.deleteBeneficiarioAction = async function (id, nombre, doc) {
+  if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente al beneficiario "${nombre}" (CC: ${doc})?\n\nEsta acción también eliminará todas sus visitas de inspección registradas.`)) {
+    return;
+  }
+
+  try {
+    await window.dbManager.deleteBeneficiario(id);
+    beneficiariosData = beneficiariosData.filter((b) => b.id !== id);
+    beneficiariosFiltered = beneficiariosFiltered.filter((b) => b.id !== id);
+
+    // Actualizar métricas
+    const totalEl = document.getElementById('stat-total-beneficiarios') || document.getElementById('dash-stat-total');
+    if (totalEl) totalEl.textContent = Number(beneficiariosData.length).toLocaleString('es-CO');
+
+    const vivosEl = document.getElementById('stat-beneficiarios-vivos') || document.getElementById('dash-stat-vivos');
+    if (vivosEl) vivosEl.textContent = Number(beneficiariosData.filter((b) => b.estado == 1).length).toLocaleString('es-CO');
+
+    const fallEl = document.getElementById('stat-beneficiarios-fallecidos') || document.getElementById('dash-stat-fallecidos');
+    if (fallEl) fallEl.textContent = Number(beneficiariosData.filter((b) => b.estado == 0).length).toLocaleString('es-CO');
+
+    window.updateBeneficiarioLimitUI();
+    renderBeneficiariosPage();
+    showToast(`Beneficiario "${nombre}" eliminado correctamente.`, 'success');
+  } catch (err) {
+    showToast('Error al eliminar beneficiario: ' + err.message, 'danger');
+  }
 };
 
 window.onCreateBenMunicipioChange = function () {
