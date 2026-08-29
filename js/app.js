@@ -516,7 +516,8 @@ function resetAppState() {
         formCreateInspector.reset();
 
         await window.dbManager.syncDataFromMySQL();
-        await loadAdminDashboard();
+        await loadInspectorsTable();
+        await loadInspectoresActivityData();
       } catch (err) {
         showToast(err.message, 'danger');
       }
@@ -548,7 +549,8 @@ function resetAppState() {
         closeModal('modal-edit-inspector');
 
         await window.dbManager.syncDataFromMySQL();
-        await loadAdminDashboard();
+        await loadInspectorsTable();
+        await loadInspectoresActivityData();
       } catch (err) {
         showToast(err.message, 'danger');
       }
@@ -1457,7 +1459,10 @@ window.openBeneficiarioHistorialModal = async function (beneficiarioId) {
                 <strong style="font-size: 0.95rem; color: var(--text-primary);">Visita #${historial.length - idx}</strong>
                 <div style="font-size: 0.78rem; color: var(--text-muted);">${fecha} • Inspector: <strong>${escapeHtml(item.inspector_nombre || 'Inspector')}</strong></div>
               </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-sm" onclick="openFichaTecnica(${item.id})" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; border-radius: 4px; font-size: 0.75rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer;" title="Ver y descargar Ficha Técnica PDF de esta visita">
+                  📄 Ficha Técnica (PDF)
+                </button>
                 <span class="badge ${badgeClass}">${statusLabel}</span>
                 <span style="font-weight: 800; font-size: 1rem; color: var(--primary);">${Number(item.avance_global).toFixed(2)}%</span>
               </div>
@@ -1506,7 +1511,7 @@ async function loadInspeccionesAdminPage() {
   try {
     let list = [];
     if (navigator.onLine) {
-      const res = await fetch('/api/inspecciones?limit=500');
+      const res = await fetch('/api/inspecciones');
       if (res.ok) {
         const json = await res.json();
         if (json.ok && Array.isArray(json.data)) list = json.data;
@@ -1687,8 +1692,11 @@ function renderInspeccionesTable() {
             <button class="btn btn-secondary btn-sm" onclick="openInspectionDetailAdmin(${item.id})" style="font-size: 0.78rem; padding: 4px 8px;" title="Ver Detalle">
               👁️ Ver Detalle
             </button>
+            <button class="btn btn-sm" onclick="openFichaTecnica(${item.id})" style="font-size: 0.78rem; padding: 4px 8px; margin-left: 4px; background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;" title="Ver y descargar Ficha Técnica PDF">
+              📄 Ficha (PDF)
+            </button>
             <button class="btn btn-sm" onclick="deleteInspectionAdmin(${item.id}, '${escapeHtml((item.beneficiario_nombre || '').replace(/'/g, "\\'"))}')" style="font-size: 0.78rem; padding: 4px 8px; margin-left: 4px; background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; border-radius: 4px;" title="Eliminar Inspección">
-              🗑️ Eliminar
+              🗑️
             </button>
           </td>
         </tr>
@@ -1753,6 +1761,155 @@ function renderInspeccionesPagination(totalPages) {
 window.changeInspeccionesPage = function (newPage) {
   currentInspAdminPage = newPage;
   renderInspeccionesTable();
+};
+
+window.exportExcelBitacoraInspecciones = async function () {
+  let list = inspeccionesAdminFiltered;
+  if (!list || list.length === 0) {
+    list = inspeccionesAdminData;
+  }
+  if (!list || list.length === 0) {
+    if (navigator.onLine) {
+      try {
+        const res = await fetch('/api/inspecciones');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && Array.isArray(json.data)) list = json.data;
+        }
+      } catch (e) {}
+    }
+    if (!list || list.length === 0) {
+      list = await window.dbManager.getPendingInspecciones();
+    }
+  }
+
+  if (!list || list.length === 0) {
+    showToast('No hay visitas de inspección registradas para exportar', 'warning');
+    return;
+  }
+
+  let cTerm = 0, cEjec = 0, cSin = 0;
+  const rowsHtml = list.map((item, idx) => {
+    const fecha = item.fecha_visita ? new Date(item.fecha_visita).toLocaleString('es-CO', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }) : '--';
+
+    const pct = parseFloat(item.avance_global) || 0;
+    let estadoLabel = 'Sin Iniciar';
+    let estadoCls = 'badge-sin';
+    if (item.estado_bateria === 'TERMINADO' || pct >= 99.9) {
+      estadoLabel = 'Terminado (100%)';
+      estadoCls = 'badge-term';
+      cTerm++;
+    } else if (pct > 0) {
+      estadoLabel = 'En Ejecución';
+      estadoCls = 'badge-ejec';
+      cEjec++;
+    } else {
+      cSin++;
+    }
+
+    let fotosArr = [];
+    try {
+      fotosArr = item.fotos ? (typeof item.fotos === 'string' ? JSON.parse(item.fotos) : item.fotos) : [];
+    } catch (e) {}
+
+    const numFotos = Array.isArray(fotosArr) ? fotosArr.length : 0;
+    const obs = item.observaciones ? item.observaciones.replace(/[\r\n]+/g, ' ') : '--';
+
+    return `
+      <tr>
+        <td class="center"><strong>${idx + 1}</strong></td>
+        <td class="center">${item.id || '--'}</td>
+        <td class="center">${fecha}</td>
+        <td class="center"><strong>${item.beneficiario_id || item.id || '--'}</strong></td>
+        <td><strong>${escapeHtml(item.beneficiario_nombre || '--')}</strong></td>
+        <td class="center" style="mso-number-format:'\\@';">${escapeHtml(item.beneficiario_documento || '--')}</td>
+        <td>${escapeHtml((item.municipio || '').toUpperCase())}</td>
+        <td>${escapeHtml((item.vereda || '').toUpperCase())}</td>
+        <td class="center">${item.fase ? `Fase ${item.fase}` : 'Fase 1'}</td>
+        <td>${escapeHtml(item.inspector_nombre || 'Inspector')}</td>
+        <td class="num"><strong>${pct.toFixed(2)}%</strong></td>
+        <td class="${estadoCls}">${estadoLabel}</td>
+        <td class="center">${escapeHtml(item.estado_clima || 'Soleado')}</td>
+        <td class="center">${escapeHtml(item.coordenadas_gps || '--')}</td>
+        <td class="center">${numFotos}</td>
+        <td>${escapeHtml(obs)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  const tot = list.length;
+  const html = `
+    <div class="title">BITÁCORA OFICIAL DE INSPECCIONES Y VISITAS TÉCNICAS DE CAMPO</div>
+    <div class="subtitle">Proyecto Construcción de Baterías Sanitarias Rurales - Generado el ${new Date().toLocaleString('es-CO')}</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Estado Visitas</th>
+          <th>Total Inspecciones</th>
+          <th>Porcentaje</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>🟢 Terminadas (100%)</td>
+          <td class="num"><strong>${cTerm.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cTerm / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td>🟠 En Ejecución</td>
+          <td class="num"><strong>${cEjec.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cEjec / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td>⚪ Sin Iniciar</td>
+          <td class="num"><strong>${cSin.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>${(tot > 0 ? (cSin / tot) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr class="total-row">
+          <td>TOTAL VISITAS REGISTRADAS</td>
+          <td class="num"><strong>${tot.toLocaleString('es-CO')}</strong></td>
+          <td class="num"><strong>100.00%</strong></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <br>
+    <div class="section-header" style="color: #059669;">📋 REGISTRO DETALLADO DE LA BITÁCORA (${tot} Visitas)</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 40px;">#</th>
+          <th>#ID Visita</th>
+          <th>Fecha y Hora</th>
+          <th>ID Beneficiario</th>
+          <th>Beneficiario</th>
+          <th>Cédula / Documento</th>
+          <th>Municipio</th>
+          <th>Vereda</th>
+          <th>Fase</th>
+          <th>Inspector Responsable</th>
+          <th>% Avance Global</th>
+          <th>Estado Batería</th>
+          <th>Clima</th>
+          <th>Coordenadas GPS</th>
+          <th>Fotos</th>
+          <th>Observaciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('bitacora_global_inspecciones', 'Bitácora Inspecciones', html);
 };
 
 window.deleteInspectionAdmin = async function (inspeccionId, benNombre) {
@@ -1940,12 +2097,12 @@ window.cambiarTipoFicha = function (tipo) {
   const fechaStr = currentFichaData.fecha_visita ? new Date(currentFichaData.fecha_visita).toLocaleDateString('es-CO', { year: 'numeric', month: '2-digit', day: '2-digit' }) : new Date().toLocaleDateString('es-CO');
   const faseStr = `Fase ${currentFichaData.fase || '1'}`;
   const climaStr = currentFichaData.estado_clima || 'Soleado';
-  const codStr = `BPIN-2026-${String(currentFichaData.beneficiario_id || currentFichaData.id).padStart(4, '0')}`;
-  const nomStr = currentFichaData.beneficiario_nombre || 'N/A';
-  const docStr = currentFichaData.beneficiario_documento || 'N/A';
-  const munStr = (currentFichaData.municipio || '').toUpperCase();
-  const verStr = (currentFichaData.vereda || '').toUpperCase();
-  const coordsStr = currentFichaData.coordenadas_gps || 'N/A';
+  const codStr = String(currentFichaData.beneficiario_id || currentFichaData.id || 'N/A');
+  const nomStr = currentFichaData.beneficiario_nombre || currentFichaData.nombre || 'N/A';
+  const docStr = currentFichaData.beneficiario_documento || currentFichaData.documento || 'N/A';
+  const munStr = (currentFichaData.municipio || currentFichaData.municipio_nombre || '').toUpperCase();
+  const verStr = (currentFichaData.vereda || currentFichaData.vereda_nombre || '').toUpperCase();
+  const coordsStr = currentFichaData.coordenadas_gps || currentFichaData.coordenadas || 'N/A';
   const obsStr = currentFichaData.observaciones && currentFichaData.observaciones.trim().length > 0 ? currentFichaData.observaciones : '<<OBSERVACIÓN>>';
 
   let fotosArr = [];
@@ -2402,35 +2559,47 @@ window.cambiarTipoFicha = function (tipo) {
                 INFORMACIÓN DEL BENEFICIARIO
               </div>
               <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; padding: 5px 6px; margin-top: -1px; background: #ffffff; display: flex; flex-direction: column; gap: 4px; font-size: 7.6px;">
-                <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Código:</span>
-                  <span style="font-weight: 600; color: #1e293b; margin-left: auto;">${codStr}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58s1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41s-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>
+                    Código:
+                  </span>
+                  <span style="font-weight: 600; color: #1e293b;">${codStr}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Nombre:</span>
-                  <span style="font-weight: 700; color: #000000; margin-left: auto; text-align: right; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${nomStr}</span>
+                <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                    Nombre:
+                  </span>
+                  <span style="font-weight: 700; color: #000000; text-align: right; word-break: break-word; line-height: 1.2; font-size: 7.6px;">${nomStr}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Documento:</span>
-                  <span style="font-weight: 600; color: #1e293b; margin-left: auto;">${docStr}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>
+                    Documento:
+                  </span>
+                  <span style="font-weight: 600; color: #1e293b;">${docStr}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Municipio:</span>
-                  <span style="font-weight: 600; color: #1e293b; margin-left: auto;">${munStr}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    Municipio:
+                  </span>
+                  <span style="font-weight: 600; color: #1e293b; text-align: right;">${munStr}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2L7 10l-6 8h22L14 6z"/></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Vereda:</span>
-                  <span style="font-weight: 600; color: #1e293b; margin-left: auto;">${verStr}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="#0f3b7a"><path d="M14 6l-3.75 5 2.85 3.8-1.6 1.2L7 10l-6 8h22L14 6z"/></svg>
+                    Vereda:
+                  </span>
+                  <span style="font-weight: 600; color: #1e293b; text-align: right;">${verStr}</span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0f3b7a" stroke-width="2.2"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
-                  <span style="font-weight: 800; color: #0f3b7a;">Coordenadas:</span>
-                  <span style="font-weight: 600; color: #1e293b; margin-left: auto; font-size: 7px;">${coordsStr}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
+                  <span style="font-weight: 800; color: #0f3b7a; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0f3b7a" stroke-width="2.2"><circle cx="12" cy="12" r="7"></circle><line x1="12" y1="2" x2="12" y2="5"></line><line x1="12" y1="19" x2="12" y2="22"></line><line x1="2" y1="12" x2="5" y2="12"></line><line x1="19" y1="12" x2="22" y2="12"></line></svg>
+                    Coordenadas:
+                  </span>
+                  <span style="font-weight: 600; color: #1e293b; font-size: 7px; text-align: right;">${coordsStr}</span>
                 </div>
               </div>
             </div>
@@ -2636,7 +2805,14 @@ window.openFichaTecnicaForBeneficiario = async function (beneficiarioId) {
     // Consultar historial de visitas para este beneficiario
     const historial = await window.dbManager.getHistorialInspeccionesForBeneficiario(ben.id);
 
-    if (historial && historial.length > 0) {
+    // Si tiene 2 o más visitas registradas, abrir selector para que el usuario elija la visita
+    if (historial && historial.length > 1) {
+      window.openSelectFichaVisitaModal(ben, historial);
+      return;
+    }
+
+    // Si tiene exactamente 1 visita
+    if (historial && historial.length === 1) {
       const latestInsp = historial[0];
       if (latestInsp.id) {
         try {
@@ -2652,6 +2828,7 @@ window.openFichaTecnicaForBeneficiario = async function (beneficiarioId) {
 
       return window.openFichaTecnica({
         ...latestInsp,
+        beneficiario_id: ben.id,
         beneficiario_nombre: ben.nombre,
         beneficiario_documento: ben.documento,
         municipio: ben.municipio,
@@ -2684,6 +2861,62 @@ window.openFichaTecnicaForBeneficiario = async function (beneficiarioId) {
   } catch (err) {
     showToast('Error al generar Ficha Técnica: ' + err.message, 'danger');
   }
+};
+
+window.openSelectFichaVisitaModal = function (ben, historial) {
+  const modalTitle = document.getElementById('select-ficha-modal-title');
+  const modalSubtitle = document.getElementById('select-ficha-modal-subtitle');
+  const listContainer = document.getElementById('select-ficha-visitas-list');
+  if (!modalTitle || !listContainer) return;
+
+  modalTitle.innerHTML = `📄 Fichas Técnicas: ${escapeHtml(ben.nombre)}`;
+  modalSubtitle.textContent = `CC: ${ben.documento} • ${ben.municipio || ''} - ${ben.vereda || ''} (${historial.length} Visitas Registradas)`;
+
+  listContainer.innerHTML = historial
+    .map((v, idx) => {
+      const fecha = v.fecha_visita ? new Date(v.fecha_visita).toLocaleString('es-CO', {
+        dateStyle: 'medium',
+        timeStyle: 'short'
+      }) : '--';
+      const pct = parseFloat(v.avance_global) || 0;
+      const numVisita = historial.length - idx;
+      const esUltima = idx === 0;
+
+      let badgeClass = 'badge-status-sin-iniciar';
+      let statusLabel = '⚪ Sin Iniciar';
+      if (v.estado_bateria === 'TERMINADO' || pct >= 99.9) {
+        badgeClass = 'badge-status-terminado';
+        statusLabel = '🟢 Terminado';
+      } else if (pct > 0) {
+        badgeClass = 'badge-status-ejecucion';
+        statusLabel = '🟠 En Ejecución';
+      }
+
+      return `
+        <div style="background: var(--bg-surface); border: 1.5px solid ${esUltima ? 'var(--primary)' : 'var(--border-color)'}; border-radius: var(--radius-md); padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem; box-shadow: var(--shadow-sm);">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <strong style="font-size: 0.95rem; color: var(--text-primary);">
+                Visita #${numVisita}
+              </strong>
+              ${esUltima ? '<span style="font-size: 0.72rem; background: #059669; color: white; padding: 1px 6px; border-radius: 4px; font-weight: 700;">Última Visita</span>' : ''}
+              <span class="badge ${badgeClass}" style="font-size: 0.72rem;">${statusLabel}</span>
+              <strong style="color: var(--primary); font-size: 0.9rem;">${pct.toFixed(2)}%</strong>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 3px;">
+              📅 ${fecha} • 👷 Inspector: <strong>${escapeHtml(v.inspector_nombre || 'Inspector')}</strong>
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-sm" onclick="closeModal('modal-select-ficha-visita'); openFichaTecnica(${v.id});" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; font-weight: 700; font-size: 0.82rem; padding: 6px 12px; border-radius: 4px; display: inline-flex; align-items: center; gap: 5px; cursor: pointer;" title="Ver y descargar Ficha Técnica PDF de esta visita">
+            📄 Abrir / Descargar PDF
+          </button>
+        </div>
+      `;
+    })
+    .join('');
+
+  document.getElementById('modal-select-ficha-visita').classList.add('active');
 };
 /* ==========================================================================
    MÓDULO EJECUTIVO: DASHBOARD GERENCIAL, PODIO Y GRÁFICAS INTERACTIVAS
@@ -2814,7 +3047,7 @@ window.exportExcelDashboardEstados = async function () {
   let allInspections = [];
   if (navigator.onLine) {
     try {
-      const res = await fetch('/api/inspecciones?limit=2000');
+      const res = await fetch('/api/inspecciones');
       if (res.ok) {
         const json = await res.json();
         if (json.ok && Array.isArray(json.data)) allInspections = json.data;
@@ -2949,7 +3182,7 @@ window.exportExcelBalanceMunicipios = async function () {
   let allInspections = [];
   if (navigator.onLine) {
     try {
-      const res = await fetch('/api/inspecciones?limit=2000');
+      const res = await fetch('/api/inspecciones');
       if (res.ok) {
         const json = await res.json();
         if (json.ok && Array.isArray(json.data)) allInspections = json.data;
@@ -3132,7 +3365,7 @@ window.exportExcelComparativoFases = async function () {
   let allInspections = [];
   if (navigator.onLine) {
     try {
-      const res = await fetch('/api/inspecciones?limit=2000');
+      const res = await fetch('/api/inspecciones');
       if (res.ok) {
         const json = await res.json();
         if (json.ok && Array.isArray(json.data)) allInspections = json.data;
@@ -3450,7 +3683,7 @@ async function renderExecutiveDashboard() {
     let allInspections = [];
     if (navigator.onLine) {
       try {
-        const res = await fetch('/api/inspecciones?limit=2000');
+        const res = await fetch('/api/inspecciones');
         if (res.ok) {
           const json = await res.json();
           if (json.ok && Array.isArray(json.data)) allInspections = json.data;
@@ -4133,7 +4366,7 @@ async function loadReportesAdminPage() {
     let allInspections = [];
     if (navigator.onLine) {
       try {
-        const res = await fetch('/api/inspecciones?limit=3000');
+        const res = await fetch('/api/inspecciones');
         if (res.ok) {
           const json = await res.json();
           if (json.ok && Array.isArray(json.data)) allInspections = json.data;
@@ -4294,12 +4527,15 @@ window.onReportFilterChange = function () {
   const fHasta = document.getElementById('report-filter-fecha-hasta')?.value || '';
   const sortOrder = document.getElementById('report-filter-order')?.value || 'AVANCE_DESC';
 
+  const cleanId = search.replace(/^#/, '');
+
   // Filtrado reactivo multidimensional
   reportFilteredData = reportBeneficiariosData.filter((b) => {
     const matchSearch = !search ||
       (b.nombre && b.nombre.toLowerCase().includes(search)) ||
       (b.documento && b.documento.includes(search)) ||
-      String(b.id) === search.replace(/^#/, '');
+      String(b.id) === cleanId ||
+      String(b.id).includes(cleanId);
 
     const matchFase = !fase || String(b.fase) === String(fase);
     const matchMun = !mun || b.municipio === mun;
@@ -5913,7 +6149,10 @@ window.renderInspActivityView = function () {
                           </div>
                         </div>
 
-                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                          <button type="button" class="btn btn-sm" onclick="openFichaTecnica(${v.id})" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; border-radius: 4px; font-size: 0.75rem; padding: 3px 8px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" title="Ver y descargar Ficha Técnica PDF">
+                            📄 Ficha PDF
+                          </button>
                           <span class="badge ${avanceBadge}" style="font-size: 0.78rem; padding: 2px 7px;">
                             ${avanceLabel} (${avance.toFixed(1)}%)
                           </span>
@@ -7011,7 +7250,9 @@ window.saveInspectorZoneAssignments = async function () {
     closeModal('modal-assign-inspector-zones');
 
     // Recargar tabla de inspectores para reflejar las nuevas zonas
-    await loadAdminDashboard();
+    await window.dbManager.syncDataFromMySQL();
+    await loadInspectorsTable();
+    await loadInspectoresActivityData();
   } catch (err) {
     showToast('Error al guardar asignación: ' + err.message, 'danger');
   }

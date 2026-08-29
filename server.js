@@ -563,8 +563,7 @@ app.get('/api/municipios/:id/veredas', async (req, res) => {
 // 12. Listar beneficiarios con filtros y paginación
 app.get('/api/beneficiarios', async (req, res) => {
   try {
-    const { search, municipio_id, vereda_id, fase, estado, page = 1, limit = 50 } = req.query;
-    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const { search, municipio_id, vereda_id, fase, estado, page, limit } = req.query;
 
     let whereClauses = [];
     let params = [];
@@ -599,8 +598,8 @@ app.get('/api/beneficiarios', async (req, res) => {
     );
     const total = countResult[0].total;
 
-    // Obtener registros paginados
-    const query = `
+    // Obtener registros
+    let query = `
       SELECT 
         b.id,
         b.fase,
@@ -617,19 +616,28 @@ app.get('/api/beneficiarios', async (req, res) => {
       JOIN veredas v ON b.vereda_id = v.id
       ${whereSQL}
       ORDER BY m.nombre ASC, v.nombre ASC, b.nombre ASC
-      LIMIT ? OFFSET ?
     `;
 
-    const [rows] = await pool.query(query, [...params, parseInt(limit, 10), offset]);
+    let rows;
+    const numLimit = limit && limit !== 'all' ? parseInt(limit, 10) : null;
+    const numPage = parseInt(page, 10) || 1;
+
+    if (numLimit) {
+      const offset = (numPage - 1) * numLimit;
+      query += ` LIMIT ? OFFSET ?`;
+      [rows] = await pool.query(query, [...params, numLimit, offset]);
+    } else {
+      [rows] = await pool.query(query, params);
+    }
 
     res.json({
       ok: true,
       data: rows,
       pagination: {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        totalPages: Math.ceil(total / parseInt(limit, 10)) || 1
+        page: numPage,
+        limit: numLimit || total,
+        totalPages: numLimit ? (Math.ceil(total / numLimit) || 1) : 1
       }
     });
   } catch (err) {
@@ -1092,8 +1100,11 @@ app.get('/api/inspecciones', async (req, res) => {
       params.push(term, term, term);
     }
 
-    query += ` ORDER BY i.fecha_visita DESC LIMIT ?`;
-    params.push(parseInt(limit, 10) || 100);
+    query += ` ORDER BY i.fecha_visita DESC`;
+    if (limit) {
+      query += ` LIMIT ?`;
+      params.push(parseInt(limit, 10));
+    }
 
     const [inspecciones] = await pool.query(query, params);
 

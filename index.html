@@ -1296,6 +1296,9 @@
               <h3>Bitácora Global de Inspecciones</h3>
             </div>
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <button type="button" class="btn btn-sm" onclick="exportExcelBitacoraInspecciones()" style="font-size: 0.78rem; padding: 4px 10px; background: #059669; border: 1px solid #047857; color: #ffffff; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; border-radius: var(--border-radius-sm); cursor: pointer;" title="Exportar bitácora de inspecciones a Excel">
+                📊 Exportar Excel
+              </button>
               <button class="btn btn-secondary btn-sm" onclick="loadInspeccionesAdminPage()">
                 🔄 Refrescar
               </button>
@@ -1735,6 +1738,34 @@
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" onclick="closeModal('modal-beneficiario-historial')">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL: SELECCIONAR VISITA PARA FICHA TÉCNICA (MÚLTIPLES VISITAS)
+       ==================================================================== -->
+  <div id="modal-select-ficha-visita" class="modal-overlay">
+    <div class="modal-content" style="max-width: 620px;">
+      <div class="modal-header">
+        <div>
+          <h3 id="select-ficha-modal-title" style="display: flex; align-items: center; gap: 6px; margin: 0; font-size: 1.05rem;">
+            📄 Fichas Técnicas por Visita
+          </h3>
+          <p id="select-ficha-modal-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;"></p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-select-ficha-visita')">✕</button>
+      </div>
+      <div class="modal-body" style="max-height: 480px; overflow-y: auto; padding: 1rem;">
+        <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+          Este beneficiario cuenta con <strong>múltiples visitas de inspección registradas</strong>. Selecciona la visita específica de la cual deseas generar y descargar el PDF de la Ficha Técnica Oficial:
+        </p>
+        <div id="select-ficha-visitas-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+          <!-- Listado dinámico de visitas -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-select-ficha-visita')">Cerrar</button>
       </div>
     </div>
   </div>

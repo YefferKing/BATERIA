@@ -747,7 +747,7 @@ class DatabaseManager {
   async getInspecciones() {
     if (navigator.onLine) {
       try {
-        const res = await fetch(`${API_URL}/inspecciones?limit=1000`);
+        const res = await fetch(`${API_URL}/inspecciones`);
         if (res.ok) {
           const json = await res.json();
           if (json.ok && Array.isArray(json.data)) {
