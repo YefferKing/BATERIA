@@ -2113,9 +2113,9 @@ window.cambiarTipoFicha = function (tipo) {
   const validFotos = Array.isArray(fotosArr) ? fotosArr.filter((f) => f && typeof f === 'string' && f.trim().length > 0) : [];
   const hasPhotos = validFotos.length > 0;
 
-  const placeholderSvg = `<svg width="44" height="36" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="#cbd5e1" fill="#f8fafc"/><circle cx="8.5" cy="8.5" r="1.8" fill="#cbd5e1"/><path d="M21 15l-5-5L5 21" stroke="#cbd5e1" fill="none"/><path d="M15 15l-2-2-4 4" stroke="#cbd5e1" fill="none"/></svg>`;
-  const foto1Html = validFotos[0] ? `<img src="${validFotos[0]}" style="width: 100%; height: 100%; object-fit: contain;">` : placeholderSvg;
-  const foto2Html = validFotos[1] ? `<img src="${validFotos[1]}" style="width: 100%; height: 100%; object-fit: contain;">` : placeholderSvg;
+  const placeholderSvg = `<svg width="54" height="44" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="#cbd5e1" fill="#f8fafc"/><circle cx="8.5" cy="8.5" r="1.8" fill="#cbd5e1"/><path d="M21 15l-5-5L5 21" stroke="#cbd5e1" fill="none"/><path d="M15 15l-2-2-4 4" stroke="#cbd5e1" fill="none"/></svg>`;
+  const foto1Html = validFotos[0] ? `<img src="${validFotos[0]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
+  const foto2Html = validFotos[1] ? `<img src="${validFotos[1]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
 
   const globalAvance = parseFloat(currentFichaData.avance_global) || 0;
   let genStatus = 'Sin Iniciar';
@@ -2191,7 +2191,7 @@ window.cambiarTipoFicha = function (tipo) {
                 <div style="width: 14px; height: 14px; background: #3a4b24; color: #ffffff; border-radius: 3px; font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
                 <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase;">VISTA GENERAL</div>
               </div>
-              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 95px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
+              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
                 ${foto1Html}
               </div>
             </div>
@@ -2200,7 +2200,7 @@ window.cambiarTipoFicha = function (tipo) {
                 <div style="width: 14px; height: 14px; background: #3a4b24; color: #ffffff; border-radius: 3px; font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</div>
                 <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase;">EXCAVACIÓN</div>
               </div>
-              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 95px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
+              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
                 ${foto2Html}
               </div>
             </div>
@@ -2464,7 +2464,7 @@ window.cambiarTipoFicha = function (tipo) {
                 <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
                 <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Vista General</div>
               </div>
-              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 95px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
+              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
                 ${foto1Html}
               </div>
             </div>
@@ -2474,7 +2474,7 @@ window.cambiarTipoFicha = function (tipo) {
                 <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</div>
                 <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Excavación</div>
               </div>
-              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 95px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
+              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
                 ${foto2Html}
               </div>
             </div>
@@ -2755,6 +2755,8 @@ window.printFichaTecnica = function () {
             margin: 0 auto !important;
             padding: 0 !important;
             background: #ffffff !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
         </style>
       </head>
