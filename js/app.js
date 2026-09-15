@@ -2061,35 +2061,35 @@ window.cambiarTipoFicha = function (tipo) {
 
   if (!currentFichaData || !container) return;
 
-  const defaultActNames = [
-    'Preliminares',
-    'Cimentación',
-    'Mampostería',
-    'Estructura',
-    'Cubierta',
-    'Instalaciones Sanitarias',
-    'Instalaciones Hidráulicas',
-    'Instalaciones Eléctricas',
-    'Acabados - Pañetes',
-    'Acabados - Enchapes',
-    'Carpintería Metálica',
-    'Tanques Sépticos',
-    'Campo de Infiltración'
+  const defaultActsFicha = [
+    { id: 1, orden: 1, nombre: 'PRELIMINARES' },
+    { id: 6, orden: 2, nombre: 'REDES SANITARIAS' },
+    { id: 2, orden: 3, nombre: 'CIMENTACION' },
+    { id: 3, orden: 4, nombre: 'MAMPOSTERIA' },
+    { id: 4, orden: 5, nombre: 'ESTRUCTURA' },
+    { id: 5, orden: 6, nombre: 'CUBIERTA' },
+    { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS' },
+    { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS' },
+    { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA' },
+    { id: 10, orden: 10, nombre: 'ENCHAPE' },
+    { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA' },
+    { id: 12, orden: 12, nombre: 'TANQUE SEPTICO' },
+    { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION' }
   ];
 
   let detallesList = [];
   if (Array.isArray(currentFichaData.detalles) && currentFichaData.detalles.length > 0) {
     detallesList = currentFichaData.detalles;
   } else if (currentFichaData.actividadesScores) {
-    detallesList = defaultActNames.map((name, idx) => ({
-      orden: idx + 1,
-      actividad_nombre: name,
-      porcentaje: currentFichaData.actividadesScores[idx + 1] || 0
+    detallesList = defaultActsFicha.map((act) => ({
+      orden: act.orden,
+      actividad_nombre: act.nombre,
+      porcentaje: currentFichaData.actividadesScores[act.id] || 0
     }));
   } else {
-    detallesList = defaultActNames.map((name, idx) => ({
-      orden: idx + 1,
-      actividad_nombre: name,
+    detallesList = defaultActsFicha.map((act) => ({
+      orden: act.orden,
+      actividad_nombre: act.nombre,
       porcentaje: currentFichaData.avance_global >= 99.9 ? 100 : 0
     }));
   }
@@ -4051,7 +4051,7 @@ async function renderExecutiveDashboard() {
 
       // Dataset 2: Fase 2 (solo llena los índices de Fase 2)
       const dataF2 = allItems.map(it => it.fase === 2 ? it.total : null);
-      const customLabelsF2 = allItems.map(it => it.fase === 2 ? `${it.total} (${it.avg.toFixed(1)}%)` : '');
+      const customLabelsF2 = allItems.map(it => it.fase === 2 ? `${it.total}` : '');
 
       chartMunicipiosStacked = new Chart(ctxStacked, {
         type: 'bar',
@@ -4060,14 +4060,14 @@ async function renderExecutiveDashboard() {
           labels,
           datasets: [
             {
-              label: '🔵 Fase 1 (Baterías & % Avance)',
+              label: '🔵 Fase 1 (Baterías)',
               data: dataF1,
               customLabels: customLabelsF1,
               backgroundColor: '#0284c7',
               borderRadius: 4
             },
             {
-              label: '🟣 Fase 2 (Baterías & % Avance)',
+              label: '🟣 Fase 2 (Baterías)',
               data: dataF2,
               customLabels: customLabelsF2,
               backgroundColor: '#8b5cf6',
@@ -4129,19 +4129,19 @@ async function renderExecutiveDashboard() {
     if (actData.length === 0) {
       // Fallback local con las 13 actividades oficiales
       const defaultActs = [
-        { orden: 1, nombre: 'Preliminares', peso_porcentual: 0.169, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 2, nombre: 'Cimentación', peso_porcentual: 10.024, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 3, nombre: 'Mampostería', peso_porcentual: 3.608, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 4, nombre: 'Estructura', peso_porcentual: 8.490, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 5, nombre: 'Cubierta', peso_porcentual: 6.159, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 6, nombre: 'Instalaciones Sanitarias', peso_porcentual: 9.243, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 7, nombre: 'Instalaciones Hidráulicas', peso_porcentual: 6.813, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 8, nombre: 'Instalaciones Eléctricas', peso_porcentual: 1.965, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 9, nombre: 'Acabados - Pañetes', peso_porcentual: 12.000, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 10, nombre: 'Acabados - Enchapes', peso_porcentual: 5.058, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 11, nombre: 'Carpintería Metálica', peso_porcentual: 3.181, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 12, nombre: 'Tanques Sépticos', peso_porcentual: 29.617, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
-        { orden: 13, nombre: 'Campo de Infiltración', peso_porcentual: 3.673, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios }
+        { id: 1, orden: 1, nombre: 'PRELIMINARES', peso_porcentual: 0.169, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 6, orden: 2, nombre: 'REDES SANITARIAS', peso_porcentual: 9.243, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 2, orden: 3, nombre: 'CIMENTACION', peso_porcentual: 10.024, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 3, orden: 4, nombre: 'MAMPOSTERIA', peso_porcentual: 3.608, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 4, orden: 5, nombre: 'ESTRUCTURA', peso_porcentual: 8.490, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 5, orden: 6, nombre: 'CUBIERTA', peso_porcentual: 6.159, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS', peso_porcentual: 6.813, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS', peso_porcentual: 1.965, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA', peso_porcentual: 12.000, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 10, orden: 10, nombre: 'ENCHAPE', peso_porcentual: 5.058, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA', peso_porcentual: 3.181, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 12, orden: 12, nombre: 'TANQUE SEPTICO', peso_porcentual: 29.617, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios },
+        { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION', peso_porcentual: 3.673, promedio_avance: 0, terminadas: 0, en_ejecucion: 0, sin_iniciar: totalBeneficiarios }
       ];
       actData = defaultActs;
     }
@@ -4841,19 +4841,19 @@ function renderReportCharts(total, sinIniciar, ejecucion, terminadas, selectedMu
     const gridColor = isDarkTheme ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)';
 
     const defaultActs = [
-      { id: 1, orden: 1, nombre: 'Preliminares', peso_porcentual: 0.169 },
-      { id: 2, orden: 2, nombre: 'Cimentación', peso_porcentual: 10.024 },
-      { id: 3, orden: 3, nombre: 'Mampostería', peso_porcentual: 3.608 },
-      { id: 4, orden: 4, nombre: 'Estructura', peso_porcentual: 8.490 },
-      { id: 5, orden: 5, nombre: 'Cubierta', peso_porcentual: 6.159 },
-      { id: 6, orden: 6, nombre: 'Instalaciones Sanitarias', peso_porcentual: 9.243 },
-      { id: 7, orden: 7, nombre: 'Instalaciones Hidráulicas', peso_porcentual: 6.813 },
-      { id: 8, orden: 8, nombre: 'Instalaciones Eléctricas', peso_porcentual: 1.965 },
-      { id: 9, orden: 9, nombre: 'Acabados - Pañetes', peso_porcentual: 12.000 },
-      { id: 10, orden: 10, nombre: 'Acabados - Enchapes', peso_porcentual: 5.058 },
-      { id: 11, orden: 11, nombre: 'Carpintería Metálica', peso_porcentual: 3.181 },
-      { id: 12, orden: 12, nombre: 'Tanques Sépticos', peso_porcentual: 29.617 },
-      { id: 13, orden: 13, nombre: 'Campo de Infiltración', peso_porcentual: 3.673 }
+      { id: 1, orden: 1, nombre: 'PRELIMINARES', peso_porcentual: 0.169 },
+      { id: 6, orden: 2, nombre: 'REDES SANITARIAS', peso_porcentual: 9.243 },
+      { id: 2, orden: 3, nombre: 'CIMENTACION', peso_porcentual: 10.024 },
+      { id: 3, orden: 4, nombre: 'MAMPOSTERIA', peso_porcentual: 3.608 },
+      { id: 4, orden: 5, nombre: 'ESTRUCTURA', peso_porcentual: 8.490 },
+      { id: 5, orden: 6, nombre: 'CUBIERTA', peso_porcentual: 6.159 },
+      { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS', peso_porcentual: 6.813 },
+      { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS', peso_porcentual: 1.965 },
+      { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA', peso_porcentual: 12.000 },
+      { id: 10, orden: 10, nombre: 'ENCHAPE', peso_porcentual: 5.058 },
+      { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA', peso_porcentual: 3.181 },
+      { id: 12, orden: 12, nombre: 'TANQUE SEPTICO', peso_porcentual: 29.617 },
+      { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION', peso_porcentual: 3.673 }
     ];
 
     const actReportData = defaultActs.map((act) => {
@@ -5386,19 +5386,19 @@ window.exportReportToCSV = function () {
             <th>% Avance Global</th>
             <th>Estado Constructivo</th>
             <th>Fecha Última Visita</th>
-            <th>1. Preliminares (0.169%)</th>
-            <th>2. Cimentación (10.024%)</th>
-            <th>3. Mampostería (3.608%)</th>
-            <th>4. Estructura (8.490%)</th>
-            <th>5. Cubierta (6.159%)</th>
-            <th>6. Inst. Sanitarias (9.243%)</th>
-            <th>7. Inst. Hidráulicas (6.813%)</th>
-            <th>8. Inst. Eléctricas (1.965%)</th>
-            <th>9. Pañetes (12.000%)</th>
-            <th>10. Enchapes (5.058%)</th>
-            <th>11. Carpintería (3.181%)</th>
-            <th>12. Tanques Sépticos (29.617%)</th>
-            <th>13. Campo Infiltración (3.673%)</th>
+            <th>1. PRELIMINARES (0.169%)</th>
+            <th>2. REDES SANITARIAS (9.243%)</th>
+            <th>3. CIMENTACION (10.024%)</th>
+            <th>4. MAMPOSTERIA (3.608%)</th>
+            <th>5. ESTRUCTURA (8.490%)</th>
+            <th>6. CUBIERTA (6.159%)</th>
+            <th>7. INSTALACIONES HIDRAULICAS (6.813%)</th>
+            <th>8. INSTALACIONES ELECTRICAS (1.965%)</th>
+            <th>9. PAÑETE-PINTURA (12.000%)</th>
+            <th>10. ENCHAPE (5.058%)</th>
+            <th>11. CARPINTERIA METALICA (3.181%)</th>
+            <th>12. TANQUE SEPTICO (29.617%)</th>
+            <th>13. CAMPO DE INFILTRACION (3.673%)</th>
           </tr>
         </thead>
         <tbody>
@@ -5427,11 +5427,11 @@ window.exportReportToCSV = function () {
                 <td class="text-center ${estadoClass}">${estadoLabel}</td>
                 <td class="text-center">${b.fecha_visita ? new Date(b.fecha_visita).toLocaleString('es-CO') : 'Sin Visita'}</td>
                 <td class="text-center">${scores[1] !== undefined ? scores[1] + '%' : '0%'}</td>
+                <td class="text-center">${scores[6] !== undefined ? scores[6] + '%' : '0%'}</td>
                 <td class="text-center">${scores[2] !== undefined ? scores[2] + '%' : '0%'}</td>
                 <td class="text-center">${scores[3] !== undefined ? scores[3] + '%' : '0%'}</td>
                 <td class="text-center">${scores[4] !== undefined ? scores[4] + '%' : '0%'}</td>
                 <td class="text-center">${scores[5] !== undefined ? scores[5] + '%' : '0%'}</td>
-                <td class="text-center">${scores[6] !== undefined ? scores[6] + '%' : '0%'}</td>
                 <td class="text-center">${scores[7] !== undefined ? scores[7] + '%' : '0%'}</td>
                 <td class="text-center">${scores[8] !== undefined ? scores[8] + '%' : '0%'}</td>
                 <td class="text-center">${scores[9] !== undefined ? scores[9] + '%' : '0%'}</td>

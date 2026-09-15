@@ -206,34 +206,34 @@ async function initMySQL() {
     } catch (e) {}
 
     const officialActivities = [
-      [1, 'Preliminares', 0.169, 1],
-      [2, 'Cimentación', 10.024, 1],
-      [3, 'Mampostería', 3.608, 1],
-      [4, 'Estructura', 8.490, 1],
-      [5, 'Cubierta', 6.159, 1],
-      [6, 'Instalaciones Sanitarias', 9.243, 1],
-      [7, 'Instalaciones Hidráulicas', 6.813, 1],
-      [8, 'Instalaciones Eléctricas', 1.965, 1],
-      [9, 'Acabados - Pañetes', 12.000, 1],
-      [10, 'Acabados - Enchapes', 5.058, 1],
-      [11, 'Carpintería Metálica', 3.181, 1],
-      [12, 'Tanques Sépticos', 29.617, 1],
-      [13, 'Campo de Infiltración', 3.673, 1]
+      { id: 1, orden: 1, nombre: 'PRELIMINARES', peso_porcentual: 0.169, activo: 1 },
+      { id: 6, orden: 2, nombre: 'REDES SANITARIAS', peso_porcentual: 9.243, activo: 1 },
+      { id: 2, orden: 3, nombre: 'CIMENTACION', peso_porcentual: 10.024, activo: 1 },
+      { id: 3, orden: 4, nombre: 'MAMPOSTERIA', peso_porcentual: 3.608, activo: 1 },
+      { id: 4, orden: 5, nombre: 'ESTRUCTURA', peso_porcentual: 8.490, activo: 1 },
+      { id: 5, orden: 6, nombre: 'CUBIERTA', peso_porcentual: 6.159, activo: 1 },
+      { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS', peso_porcentual: 6.813, activo: 1 },
+      { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS', peso_porcentual: 1.965, activo: 1 },
+      { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA', peso_porcentual: 12.000, activo: 1 },
+      { id: 10, orden: 10, nombre: 'ENCHAPE', peso_porcentual: 5.058, activo: 1 },
+      { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA', peso_porcentual: 3.181, activo: 1 },
+      { id: 12, orden: 12, nombre: 'TANQUE SEPTICO', peso_porcentual: 29.617, activo: 1 },
+      { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION', peso_porcentual: 3.673, activo: 1 }
     ];
 
     const [actCount] = await pool.query('SELECT COUNT(*) as count FROM actividades_inspeccion');
     if (actCount[0].count === 0) {
       await pool.query(
-        'INSERT INTO actividades_inspeccion (orden, nombre, peso_porcentual, activo) VALUES ?',
-        [officialActivities]
+        'INSERT INTO actividades_inspeccion (id, orden, nombre, peso_porcentual, activo) VALUES ?',
+        [officialActivities.map((a) => [a.id, a.orden, a.nombre, a.peso_porcentual, a.activo])]
       );
-      console.log('✓ 13 Capítulos/Actividades de construcción parametrizados en MySQL con pesos oficiales.');
+      console.log('✓ 13 Capítulos/Actividades de construcción parametrizados en MySQL con pesos oficiales y nuevo orden.');
     } else {
-      // Actualizar pesos oficiales en las actividades existentes
+      // Actualizar orden, nombre y pesos oficiales en las actividades existentes por ID
       for (const act of officialActivities) {
         await pool.query(
-          'UPDATE actividades_inspeccion SET peso_porcentual = ? WHERE orden = ?',
-          [act[2], act[0]]
+          'UPDATE actividades_inspeccion SET orden = ?, nombre = ?, peso_porcentual = ? WHERE id = ?',
+          [act.orden, act.nombre, act.peso_porcentual, act.id]
         );
       }
 

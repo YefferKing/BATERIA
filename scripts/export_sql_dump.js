@@ -181,19 +181,19 @@ INSERT INTO \`usuarios\` (\`id\`, \`nombre\`, \`usuario\`, \`documento\`, \`pin\
 
 -- 6. INSERTAR 13 CAPÍTULOS OFICIALES DE CONSTRUCCIÓN
 INSERT INTO \`actividades_inspeccion\` (\`id\`, \`orden\`, \`nombre\`, \`peso_porcentual\`, \`activo\`) VALUES
-(1, 1, 'Preliminares', 0.169, 1),
-(2, 2, 'Cimentación', 10.024, 1),
-(3, 3, 'Mampostería', 3.608, 1),
-(4, 4, 'Estructura', 8.490, 1),
-(5, 5, 'Cubierta', 6.159, 1),
-(6, 6, 'Instalaciones Sanitarias', 9.243, 1),
-(7, 7, 'Instalaciones Hidráulicas', 6.813, 1),
-(8, 8, 'Instalaciones Eléctricas', 1.965, 1),
-(9, 9, 'Acabados - Pañetes', 12.000, 1),
-(10, 10, 'Acabados - Enchapes', 5.058, 1),
-(11, 11, 'Carpintería Metálica', 3.181, 1),
-(12, 12, 'Tanques Sépticos', 29.617, 1),
-(13, 13, 'Campo de Infiltración', 3.673, 1);
+(1, 1, 'PRELIMINARES', 0.169, 1),
+(6, 2, 'REDES SANITARIAS', 9.243, 1),
+(2, 3, 'CIMENTACION', 10.024, 1),
+(3, 4, 'MAMPOSTERIA', 3.608, 1),
+(4, 5, 'ESTRUCTURA', 8.490, 1),
+(5, 6, 'CUBIERTA', 6.159, 1),
+(7, 7, 'INSTALACIONES HIDRAULICAS', 6.813, 1),
+(8, 8, 'INSTALACIONES ELECTRICAS', 1.965, 1),
+(9, 9, 'PAÑETE-PINTURA', 12.000, 1),
+(10, 10, 'ENCHAPE', 5.058, 1),
+(11, 11, 'CARPINTERIA METALICA', 3.181, 1),
+(12, 12, 'TANQUE SEPTICO', 29.617, 1),
+(13, 13, 'CAMPO DE INFILTRACION', 3.673, 1);
 \n`;
 
     // Volcar Municipios
