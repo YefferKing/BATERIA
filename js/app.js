@@ -6922,16 +6922,40 @@ async function loadRolesAndPermissions() {
   }
 
   try {
-    const [rolesRes, permisosRes] = await Promise.all([
-      fetch('/api/roles'),
-      fetch('/api/permisos')
-    ]);
+    let roles = [];
+    let permisos = [];
 
-    const rolesData = await rolesRes.json();
-    const permisosData = await permisosRes.json();
+    try {
+      const [rolesRes, permisosRes] = await Promise.all([
+        fetch('/api/roles'),
+        fetch('/api/permisos')
+      ]);
 
-    const roles = rolesData.ok ? rolesData.data : [];
-    const permisos = permisosData.ok ? permisosData.data : [];
+      const rolesData = await rolesRes.json();
+      const permisosData = await permisosRes.json();
+
+      roles = rolesData.ok ? rolesData.data : [];
+      permisos = permisosData.ok ? permisosData.data : [];
+    } catch (netErr) {
+      if (window.dbManager) {
+        roles = await window.dbManager.getAllRoles();
+        permisos = await window.dbManager.getAllPermisos();
+      }
+    }
+
+    if (roles.length === 0 && window.dbManager) {
+      roles = await window.dbManager.getAllRoles();
+      permisos = await window.dbManager.getAllPermisos();
+    }
+
+    if (roles.length === 0) {
+      container.innerHTML = `
+        <div style="grid-column: 1 / -1; text-align: center; padding: 2rem; color: var(--text-muted); background: var(--bg-surface); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+          ⚠️ No se encontraron roles configurados en la base de datos.
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = roles
       .map((role) => {
@@ -7096,17 +7120,32 @@ async function populateRolesSelect(selectId, selectedRoleId = null) {
   if (!select) return;
 
   try {
-    const res = await fetch('/api/roles');
-    const data = await res.json();
-    const roles = data.ok ? data.data : [];
+    let roles = [];
+    try {
+      const res = await fetch('/api/roles');
+      const data = await res.json();
+      roles = data.ok ? data.data : [];
+    } catch (netErr) {
+      if (window.dbManager) {
+        roles = await window.dbManager.getAllRoles();
+      }
+    }
 
-    select.innerHTML = roles
-      .map(
-        (r) => `<option value="${r.id}" ${selectedRoleId === r.id ? 'selected' : ''}>${r.nombre.toUpperCase()} - ${escapeHtml(r.descripcion || '')}</option>`
-      )
-      .join('');
+    if (roles.length === 0 && window.dbManager) {
+      roles = await window.dbManager.getAllRoles();
+    }
+
+    if (roles.length > 0) {
+      select.innerHTML = roles
+        .map(
+          (r) => `<option value="${r.id}" ${selectedRoleId === r.id ? 'selected' : ''}>${r.nombre.toUpperCase()} - ${escapeHtml(r.descripcion || '')}</option>`
+        )
+        .join('');
+    } else {
+      select.innerHTML = `<option value="2">INSPECTOR - Inspector de Campo</option><option value="1">ADMIN - Super Administrador</option>`;
+    }
   } catch (e) {
-    select.innerHTML = `<option value="2">INSPECTOR</option><option value="1">ADMIN</option>`;
+    select.innerHTML = `<option value="2">INSPECTOR - Inspector de Campo</option><option value="1">ADMIN - Super Administrador</option>`;
   }
 }
 

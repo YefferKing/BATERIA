@@ -146,6 +146,36 @@ class DatabaseManager {
         console.log('Error sincronizando usuarios de MySQL:', errU.message);
       }
 
+      // 1.1 Sincronizar Roles y Permisos (Catálogo dinámico RBAC)
+      try {
+        const [resRoles, resPermisos] = await Promise.all([
+          fetch(`${API_URL}/roles`, { signal: AbortSignal.timeout(10000) }),
+          fetch(`${API_URL}/permisos`, { signal: AbortSignal.timeout(10000) })
+        ]);
+
+        if (resRoles.ok) {
+          const jsonRoles = await resRoles.json();
+          if (jsonRoles.ok && Array.isArray(jsonRoles.data)) {
+            const txR = this.db.transaction('roles', 'readwrite');
+            const storeR = txR.objectStore('roles');
+            storeR.clear();
+            for (const r of jsonRoles.data) storeR.put(r);
+          }
+        }
+
+        if (resPermisos.ok) {
+          const jsonPermisos = await resPermisos.json();
+          if (jsonPermisos.ok && Array.isArray(jsonPermisos.data)) {
+            const txP = this.db.transaction('permisos', 'readwrite');
+            const storeP = txP.objectStore('permisos');
+            storeP.clear();
+            for (const p of jsonPermisos.data) storeP.put(p);
+          }
+        }
+      } catch (errRP) {
+        console.log('Aviso: Sincronización de roles y permisos:', errRP.message);
+      }
+
       // 2. Sincronizar Municipios, Veredas, Beneficiarios, Actividades y Asignaciones Territoriales
       try {
         const resCat = await fetch(`${API_URL}/beneficiarios/catalogos`, { signal: AbortSignal.timeout(30000) });
@@ -236,6 +266,7 @@ class DatabaseManager {
           if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
             const tx = this.db.transaction('usuarios', 'readwrite');
             const store = tx.objectStore('usuarios');
+            store.clear();
             for (const u of json.data) {
               store.put(u);
             }
@@ -283,6 +314,76 @@ class DatabaseManager {
     }
 
     return localUsers;
+  }
+
+  /**
+   * Obtener todos los roles con fallback offline
+   */
+  async getAllRoles() {
+    if (navigator.onLine) {
+      try {
+        const res = await fetch(`${API_URL}/roles`, { signal: AbortSignal.timeout(10000) });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+            const tx = this.db.transaction('roles', 'readwrite');
+            const store = tx.objectStore('roles');
+            store.clear();
+            for (const r of json.data) store.put(r);
+            return json.data;
+          }
+        }
+      } catch (err) {
+        console.log('Consultando respaldo local de roles:', err.message);
+      }
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction('roles', 'readonly');
+        const store = tx.objectStore('roles');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
+  }
+
+  /**
+   * Obtener todos los permisos con fallback offline
+   */
+  async getAllPermisos() {
+    if (navigator.onLine) {
+      try {
+        const res = await fetch(`${API_URL}/permisos`, { signal: AbortSignal.timeout(10000) });
+        if (res.ok) {
+          const json = await res.json();
+          if (json.ok && Array.isArray(json.data) && json.data.length > 0) {
+            const tx = this.db.transaction('permisos', 'readwrite');
+            const store = tx.objectStore('permisos');
+            store.clear();
+            for (const p of json.data) store.put(p);
+            return json.data;
+          }
+        }
+      } catch (err) {
+        console.log('Consultando respaldo local de permisos:', err.message);
+      }
+    }
+
+    return new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction('permisos', 'readonly');
+        const store = tx.objectStore('permisos');
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        resolve([]);
+      }
+    });
   }
 
   async findUserByIdentifier(identifier) {

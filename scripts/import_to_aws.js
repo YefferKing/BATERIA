@@ -5,7 +5,7 @@ require('dotenv').config();
 
 async function importToAWS(targetHost, targetPassword, targetUser) {
   const host = targetHost || process.env.DB_HOST || 'bateria.cypwu0wsknim.us-east-1.rds.amazonaws.com';
-  const password = targetPassword || process.env.DB_PASSWORD || 'Baterias2026*';
+  const password = targetPassword || process.env.DB_PASSWORD || 'Bateria2026*';
   const user = targetUser || 'admin';
   const database = process.env.DB_NAME || 'bateria';
 
