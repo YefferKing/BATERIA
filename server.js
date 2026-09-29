@@ -1175,6 +1175,134 @@ app.get('/api/inspecciones/:id', async (req, res) => {
   }
 });
 
+// 21. Actualizar porcentajes y datos de una visita de inspección (Administrador)
+app.put('/api/inspecciones/:id', async (req, res) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const inspeccionId = parseInt(req.params.id, 10);
+    const {
+      detalles,
+      observaciones,
+      avance_global,
+      estado_clima,
+      coordenadas_gps
+    } = req.body;
+
+    // 1. Validar existencia de la inspección
+    const [inspRows] = await conn.query('SELECT * FROM inspecciones WHERE id = ?', [inspeccionId]);
+    if (inspRows.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ ok: false, error: 'Inspección no encontrada' });
+    }
+    const currentInsp = inspRows[0];
+
+    // 2. Si se suministraron detalles de las actividades, actualizar sus porcentajes
+    if (Array.isArray(detalles) && detalles.length > 0) {
+      for (const det of detalles) {
+        const actId = parseInt(det.actividad_id, 10);
+        let pct = parseInt(det.porcentaje, 10);
+        if (isNaN(pct)) pct = 0;
+        if (pct < 0) pct = 0;
+        if (pct > 100) pct = 100;
+
+        const estadoAct = pct >= 100 ? 'TERMINADO' : (pct > 0 ? 'EN_EJECUCION' : 'SIN_INICIAR');
+        const obsItem = det.observacion_item !== undefined ? (det.observacion_item ? det.observacion_item.trim() : null) : null;
+
+        // Verificar si ya existe este detalle
+        const [existingDet] = await conn.query(
+          'SELECT id FROM inspeccion_detalles WHERE inspeccion_id = ? AND actividad_id = ?',
+          [inspeccionId, actId]
+        );
+
+        if (existingDet.length > 0) {
+          await conn.query(`
+            UPDATE inspeccion_detalles 
+            SET porcentaje = ?, estado_actividad = ?, observacion_item = COALESCE(?, observacion_item)
+            WHERE inspeccion_id = ? AND actividad_id = ?
+          `, [pct, estadoAct, obsItem, inspeccionId, actId]);
+        } else {
+          // Obtener peso de la actividad
+          const [actInfo] = await conn.query('SELECT peso_porcentual FROM actividades_inspeccion WHERE id = ?', [actId]);
+          const peso = actInfo.length > 0 ? actInfo[0].peso_porcentual : 7.69;
+          await conn.query(`
+            INSERT INTO inspeccion_detalles (inspeccion_id, actividad_id, porcentaje, estado_actividad, peso_porcentual, observacion_item)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `, [inspeccionId, actId, pct, estadoAct, peso, obsItem]);
+        }
+      }
+    }
+
+    // 3. Recalcular el avance_global ponderado según la fórmula oficial de MySQL
+    const [calcRows] = await conn.query(`
+      SELECT 
+        ROUND(SUM((d.porcentaje * a.peso_porcentual) / 100), 2) as nuevo_avance
+      FROM inspeccion_detalles d
+      JOIN actividades_inspeccion a ON d.actividad_id = a.id
+      WHERE d.inspeccion_id = ?
+    `, [inspeccionId]);
+
+    let nuevoAvance = calcRows[0]?.nuevo_avance !== null && calcRows[0]?.nuevo_avance !== undefined
+      ? parseFloat(calcRows[0].nuevo_avance)
+      : (avance_global !== undefined ? parseFloat(avance_global) : parseFloat(currentInsp.avance_global || 0));
+
+    if (isNaN(nuevoAvance)) nuevoAvance = 0;
+    if (nuevoAvance > 100) nuevoAvance = 100;
+    if (nuevoAvance < 0) nuevoAvance = 0;
+
+    // Determinar nuevo estado de la batería sanitaria
+    let nuevoEstado = 'SIN_INICIAR';
+    if (nuevoAvance >= 99.9) {
+      nuevoEstado = 'TERMINADO';
+    } else if (nuevoAvance > 0) {
+      nuevoEstado = 'EN_EJECUCION';
+    }
+
+    const newObs = observaciones !== undefined ? (observaciones ? observaciones.trim() : null) : currentInsp.observaciones;
+    const newGps = coordenadas_gps !== undefined ? (coordenadas_gps ? coordenadas_gps.trim() : null) : currentInsp.coordenadas_gps;
+    const newClima = estado_clima !== undefined ? (estado_clima ? estado_clima.trim() : 'Soleado') : currentInsp.estado_clima;
+
+    await conn.query(`
+      UPDATE inspecciones 
+      SET avance_global = ?, estado_bateria = ?, observaciones = ?, coordenadas_gps = ?, estado_clima = ?
+      WHERE id = ?
+    `, [nuevoAvance, nuevoEstado, newObs, newGps, newClima, inspeccionId]);
+
+    await conn.commit();
+
+    // 4. Obtener datos completos actualizados para responder
+    const [detallesActualizados] = await pool.query(`
+      SELECT 
+        d.id, d.actividad_id, a.nombre as actividad_nombre, a.orden,
+        d.porcentaje, d.estado_actividad, d.peso_porcentual, d.observacion_item
+      FROM inspeccion_detalles d
+      JOIN actividades_inspeccion a ON d.actividad_id = a.id
+      WHERE d.inspeccion_id = ?
+      ORDER BY a.orden ASC
+    `, [inspeccionId]);
+
+    res.json({
+      ok: true,
+      mensaje: 'Avance de inspección actualizado exitosamente',
+      data: {
+        id: inspeccionId,
+        avance_global: nuevoAvance,
+        estado_bateria: nuevoEstado,
+        observaciones: newObs,
+        coordenadas_gps: newGps,
+        estado_clima: newClima,
+        detalles: detallesActualizados
+      }
+    });
+  } catch (err) {
+    await conn.rollback();
+    res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    conn.release();
+  }
+});
+
 // 21.1 Eliminar Inspección de Campo
 app.delete('/api/inspecciones/:id', async (req, res) => {
   try {

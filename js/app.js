@@ -1433,6 +1433,9 @@ window.openBeneficiarioHistorialModal = async function (beneficiarioId) {
       return;
     }
 
+    const currentUser = window.authService ? window.authService.getCurrentUser() : null;
+    const isSuperAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol_id === 1);
+
     timelineContainer.innerHTML = historial
       .map((item, idx) => {
         const fecha = new Date(item.fecha_visita).toLocaleString('es-CO', {
@@ -1460,6 +1463,11 @@ window.openBeneficiarioHistorialModal = async function (beneficiarioId) {
                 <div style="font-size: 0.78rem; color: var(--text-muted);">${fecha} • Inspector: <strong>${escapeHtml(item.inspector_nombre || 'Inspector')}</strong></div>
               </div>
               <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                ${isSuperAdmin ? `
+                  <button type="button" class="btn btn-sm" onclick="closeModal('modal-beneficiario-historial'); openEditInspectionModal(${item.id});" style="background: #d97706; color: #ffffff; border: 1px solid #b45309; border-radius: 4px; font-size: 0.75rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer;" title="Editar porcentajes de avance de esta visita (Administrador)">
+                    ✏️ Editar Avance
+                  </button>
+                ` : ''}
                 <button type="button" class="btn btn-sm" onclick="openFichaTecnica(${item.id})" style="background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; border-radius: 4px; font-size: 0.75rem; padding: 3px 8px; display: inline-flex; align-items: center; gap: 4px; font-weight: 600; cursor: pointer;" title="Ver y descargar Ficha Técnica PDF de esta visita">
                   📄 Ficha Técnica (PDF)
                 </button>
@@ -1636,6 +1644,9 @@ function renderInspeccionesTable() {
   const end = Math.min(start + INSPECCIONES_PER_PAGE, total);
   const pageItems = inspeccionesAdminFiltered.slice(start, end);
 
+  const currentUser = window.authService ? window.authService.getCurrentUser() : null;
+  const isSuperAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol_id === 1);
+
   tbody.innerHTML = pageItems
     .map((item) => {
       const fecha = new Date(item.fecha_visita).toLocaleString('es-CO', {
@@ -1692,6 +1703,11 @@ function renderInspeccionesTable() {
             <button class="btn btn-secondary btn-sm" onclick="openInspectionDetailAdmin(${item.id})" style="font-size: 0.78rem; padding: 4px 8px;" title="Ver Detalle">
               👁️ Ver Detalle
             </button>
+            ${isSuperAdmin ? `
+              <button class="btn btn-sm" onclick="openEditInspectionModal(${item.id})" style="font-size: 0.78rem; padding: 4px 8px; margin-left: 4px; background: #d97706; color: #ffffff; border: 1px solid #b45309; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;" title="Editar porcentaje de avance (Administrador)">
+                ✏️ Editar
+              </button>
+            ` : ''}
             <button class="btn btn-sm" onclick="openFichaTecnica(${item.id})" style="font-size: 0.78rem; padding: 4px 8px; margin-left: 4px; background: #dc2626; color: #ffffff; border: 1px solid #b91c1c; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; font-weight: 600;" title="Ver y descargar Ficha Técnica PDF">
               📄 Ficha (PDF)
             </button>
@@ -1931,6 +1947,314 @@ window.deleteInspectionAdmin = async function (inspeccionId, benNombre) {
   }
 };
 
+/* ==========================================================================
+   MODAL: MODIFICAR PORCENTAJES DE AVANCE DE INSPECCIÓN (ADMINISTRADOR)
+   ========================================================================== */
+let currentEditingInspection = null;
+let editingActivitiesScores = {};
+
+const officialActivitiesList = [
+  { id: 1, orden: 1, nombre: 'PRELIMINARES', peso_porcentual: 0.169 },
+  { id: 6, orden: 2, nombre: 'REDES SANITARIAS', peso_porcentual: 9.243 },
+  { id: 2, orden: 3, nombre: 'CIMENTACION', peso_porcentual: 10.024 },
+  { id: 3, orden: 4, nombre: 'MAMPOSTERIA', peso_porcentual: 3.608 },
+  { id: 4, orden: 5, nombre: 'ESTRUCTURA', peso_porcentual: 8.490 },
+  { id: 5, orden: 6, nombre: 'CUBIERTA', peso_porcentual: 6.159 },
+  { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS', peso_porcentual: 6.813 },
+  { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS', peso_porcentual: 1.965 },
+  { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA', peso_porcentual: 12.000 },
+  { id: 10, orden: 10, nombre: 'ENCHAPE', peso_porcentual: 5.058 },
+  { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA', peso_porcentual: 3.181 },
+  { id: 12, orden: 12, nombre: 'TANQUE SEPTICO', peso_porcentual: 29.617 },
+  { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION', peso_porcentual: 3.673 }
+];
+
+window.openEditInspectionModal = async function (inspeccionId) {
+  const currentUser = window.authService ? window.authService.getCurrentUser() : null;
+  const isSuperAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol_id === 1);
+  if (!isSuperAdmin) {
+    showToast('⚠️ Permiso denegado: Solo el Administrador puede modificar los porcentajes de avance.', 'warning');
+    return;
+  }
+
+  try {
+    let insp = null;
+    if (inspeccionesAdminData && inspeccionesAdminData.length > 0) {
+      insp = inspeccionesAdminData.find((i) => i.id == inspeccionId);
+    }
+
+    // Consultar detalle completo actualizado desde el servidor
+    try {
+      const res = await fetch(`/api/inspecciones/${inspeccionId}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.ok && json.data) insp = json.data;
+      }
+    } catch (e) {}
+
+    if (!insp) {
+      showToast('No se encontró la información de la inspección seleccionada.', 'danger');
+      return;
+    }
+
+    currentEditingInspection = insp;
+
+    // Actualizar subtítulo y datos de cabecera
+    const subTitleEl = document.getElementById('edit-insp-modal-subtitle');
+    if (subTitleEl) {
+      subTitleEl.textContent = `Visita #${insp.id} • ${insp.beneficiario_nombre || ''} • Registrada por ${insp.inspector_nombre || 'Inspector'}`;
+    }
+
+    document.getElementById('edit-insp-ben-nombre').textContent = insp.beneficiario_nombre || 'N/A';
+    document.getElementById('edit-insp-ben-doc').textContent = `CC: ${insp.beneficiario_documento || 'N/A'}`;
+    document.getElementById('edit-insp-ubicacion').textContent = `🏛️ ${insp.municipio || ''} - 🌲 ${insp.vereda || ''}`;
+    document.getElementById('edit-insp-fase').textContent = `Fase ${insp.fase || '1'}`;
+    document.getElementById('edit-insp-inspector').textContent = `👷 ${insp.inspector_nombre || 'Inspector'}`;
+    document.getElementById('edit-insp-fecha').textContent = insp.fecha_visita ? new Date(insp.fecha_visita).toLocaleString('es-CO') : 'Sin fecha';
+
+    const originalPct = parseFloat(insp.avance_global) || 0;
+    document.getElementById('edit-insp-pct-original').textContent = `${originalPct.toFixed(2)}%`;
+    document.getElementById('edit-insp-observaciones-input').value = insp.observaciones || '';
+
+    // Mapear los porcentajes de las 13 actividades constructivas
+    editingActivitiesScores = {};
+    const detallesList = Array.isArray(insp.detalles) ? insp.detalles : [];
+
+    for (const act of officialActivitiesList) {
+      const det = detallesList.find((d) => (d.actividad_id == act.id) || (d.orden == act.orden) || (d.actividad_nombre && d.actividad_nombre.toUpperCase() === act.nombre));
+      const p = det ? (parseInt(det.porcentaje, 10) || 0) : 0;
+      const obs = det ? (det.observacion_item || '') : '';
+      editingActivitiesScores[act.id] = {
+        actividad_id: act.id,
+        orden: act.orden,
+        nombre: act.nombre,
+        peso: act.peso_porcentual,
+        porcentaje: p,
+        observacion: obs
+      };
+    }
+
+    // Renderizar tarjetas interactivas de las 13 actividades
+    const container = document.getElementById('edit-insp-actividades-list');
+    container.innerHTML = officialActivitiesList.map((act) => {
+      const item = editingActivitiesScores[act.id];
+      const p = item.porcentaje;
+      const contrib = ((p * act.peso_porcentual) / 100).toFixed(2);
+
+      return `
+        <div id="edit-act-row-${act.id}" style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 6px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="width: 22px; height: 22px; background: var(--bg-subtle); color: var(--text-primary); border-radius: 50%; font-weight: 800; font-size: 0.75rem; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color);">${act.orden}</span>
+              <strong style="font-size: 0.84rem; color: var(--text-primary);">${act.nombre}</strong>
+              <span style="font-size: 0.72rem; background: var(--bg-subtle); color: var(--text-muted); padding: 1px 6px; border-radius: 4px; font-weight: 600;">Peso: ${act.peso_porcentual.toFixed(2)}%</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">Aporte: <strong id="edit-act-contrib-${act.id}" style="color: var(--primary);">${contrib}%</strong></span>
+              <div style="display: flex; align-items: center; gap: 3px;">
+                <input type="number" id="edit-act-input-${act.id}" min="0" max="100" value="${p}" 
+                  oninput="onEditInspectionActivityChange(${act.id}, this.value)" 
+                  style="width: 58px; text-align: center; font-weight: 800; font-size: 0.88rem; padding: 3px 4px; border-radius: 4px; border: 1.5px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary);">
+                <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-secondary);">%</span>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input type="range" id="edit-act-slider-${act.id}" min="0" max="100" step="1" value="${p}" 
+              oninput="onEditInspectionActivityChange(${act.id}, this.value)" 
+              style="flex: 1; accent-color: #d97706; cursor: pointer; height: 6px;">
+            
+            <!-- Botones Rápidos -->
+            <div style="display: inline-flex; gap: 3px;">
+              <button type="button" class="btn btn-sm" onclick="setEditInspectionActivityPreset(${act.id}, 0)" style="padding: 1px 5px; font-size: 0.7rem; background: var(--bg-subtle); border: 1px solid var(--border-color); color: var(--text-secondary);">0%</button>
+              <button type="button" class="btn btn-sm" onclick="setEditInspectionActivityPreset(${act.id}, 25)" style="padding: 1px 5px; font-size: 0.7rem; background: var(--bg-subtle); border: 1px solid var(--border-color); color: var(--text-secondary);">25%</button>
+              <button type="button" class="btn btn-sm" onclick="setEditInspectionActivityPreset(${act.id}, 50)" style="padding: 1px 5px; font-size: 0.7rem; background: var(--bg-subtle); border: 1px solid var(--border-color); color: var(--text-secondary);">50%</button>
+              <button type="button" class="btn btn-sm" onclick="setEditInspectionActivityPreset(${act.id}, 75)" style="padding: 1px 5px; font-size: 0.7rem; background: var(--bg-subtle); border: 1px solid var(--border-color); color: var(--text-secondary);">75%</button>
+              <button type="button" class="btn btn-sm" onclick="setEditInspectionActivityPreset(${act.id}, 100)" style="padding: 1px 5px; font-size: 0.7rem; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #059669; font-weight: 700;">100%</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Actualizar cálculos y abrir modal
+    updateEditInspectionLiveTotal();
+    document.getElementById('modal-edit-inspection-progress').classList.add('active');
+  } catch (err) {
+    showToast('Error al abrir editor de avance: ' + err.message, 'danger');
+  }
+};
+
+window.onEditInspectionActivityChange = function (actId, value) {
+  let val = parseInt(value, 10);
+  if (isNaN(val)) val = 0;
+  if (val < 0) val = 0;
+  if (val > 100) val = 100;
+
+  if (editingActivitiesScores[actId]) {
+    editingActivitiesScores[actId].porcentaje = val;
+  }
+
+  // Sincronizar input y slider
+  const slider = document.getElementById(`edit-act-slider-${actId}`);
+  const input = document.getElementById(`edit-act-input-${actId}`);
+  if (slider && slider.value != val) slider.value = val;
+  if (input && input.value != val) input.value = val;
+
+  // Actualizar aporte individual
+  const contribEl = document.getElementById(`edit-act-contrib-${actId}`);
+  if (contribEl && editingActivitiesScores[actId]) {
+    const peso = editingActivitiesScores[actId].peso;
+    contribEl.textContent = `${((val * peso) / 100).toFixed(2)}%`;
+  }
+
+  // Recalcular total global
+  updateEditInspectionLiveTotal();
+};
+
+window.setEditInspectionActivityPreset = function (actId, value) {
+  window.onEditInspectionActivityChange(actId, value);
+};
+
+window.updateEditInspectionLiveTotal = function () {
+  let totalWeighted = 0;
+
+  for (const actId in editingActivitiesScores) {
+    const item = editingActivitiesScores[actId];
+    totalWeighted += (item.porcentaje * item.peso) / 100;
+  }
+
+  let totalPct = totalWeighted;
+  if (totalPct > 100) totalPct = 100;
+  if (totalPct < 0) totalPct = 0;
+
+  const pctLabel = document.getElementById('edit-insp-pct-nuevo');
+  if (pctLabel) pctLabel.textContent = `${totalPct.toFixed(2)}%`;
+
+  const bar = document.getElementById('edit-insp-progress-bar');
+  const badge = document.getElementById('edit-insp-estado-badge');
+
+  if (bar) {
+    bar.style.width = `${totalPct}%`;
+    if (totalPct >= 99.9) {
+      bar.style.background = '#059669';
+    } else if (totalPct > 0) {
+      bar.style.background = '#d97706';
+    } else {
+      bar.style.background = '#64748b';
+    }
+  }
+
+  if (badge) {
+    if (totalPct >= 99.9) {
+      badge.className = 'badge badge-status-terminado';
+      badge.textContent = '🟢 Terminado (100%)';
+    } else if (totalPct > 0) {
+      badge.className = 'badge badge-status-ejecucion';
+      badge.textContent = '🟠 En Ejecución';
+    } else {
+      badge.className = 'badge badge-status-sin-iniciar';
+      badge.textContent = '⚪ Sin Iniciar (0%)';
+    }
+  }
+};
+
+window.saveEditInspectionProgress = async function () {
+  if (!currentEditingInspection) return;
+
+  const btn = document.getElementById('btn-save-edit-inspection');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Guardando cambios...';
+  }
+
+  try {
+    let totalWeighted = 0;
+    const detallesPayload = Object.values(editingActivitiesScores).map((item) => {
+      totalWeighted += (item.porcentaje * item.peso) / 100;
+      return {
+        actividad_id: item.actividad_id,
+        porcentaje: item.porcentaje,
+        peso_porcentual: item.peso,
+        observacion_item: item.observacion || null
+      };
+    });
+
+    let globalPct = totalWeighted;
+    if (globalPct > 100) globalPct = 100;
+    if (globalPct < 0) globalPct = 0;
+
+    let globalStatus = 'SIN_INICIAR';
+    if (globalPct >= 99.9) globalStatus = 'TERMINADO';
+    else if (globalPct > 0) globalStatus = 'EN_EJECUCION';
+
+    const obsVal = document.getElementById('edit-insp-observaciones-input')?.value.trim() || '';
+
+    const payload = {
+      detalles: detallesPayload,
+      avance_global: globalPct,
+      estado_bateria: globalStatus,
+      observaciones: obsVal
+    };
+
+    const result = await window.dbManager.updateInspeccion(currentEditingInspection.id, payload);
+
+    // Actualizar inspeccionesAdminData local
+    const foundIdx = inspeccionesAdminData.findIndex((i) => i.id == currentEditingInspection.id);
+    if (foundIdx !== -1) {
+      inspeccionesAdminData[foundIdx].avance_global = globalPct;
+      inspeccionesAdminData[foundIdx].estado_bateria = globalStatus;
+      inspeccionesAdminData[foundIdx].observaciones = obsVal;
+      inspeccionesAdminData[foundIdx].detalles = result.data?.detalles || detallesPayload;
+    }
+
+    const filteredIdx = inspeccionesAdminFiltered.findIndex((i) => i.id == currentEditingInspection.id);
+    if (filteredIdx !== -1) {
+      inspeccionesAdminFiltered[filteredIdx].avance_global = globalPct;
+      inspeccionesAdminFiltered[filteredIdx].estado_bateria = globalStatus;
+      inspeccionesAdminFiltered[filteredIdx].observaciones = obsVal;
+      inspeccionesAdminFiltered[filteredIdx].detalles = result.data?.detalles || detallesPayload;
+    }
+
+    // Si el modal de ficha técnica o de detalle estaba activo con esta inspección, sincronizar
+    if (currentFichaData && (currentFichaData.id == currentEditingInspection.id || currentFichaData.beneficiario_id == currentEditingInspection.beneficiario_id)) {
+      currentFichaData.avance_global = globalPct;
+      currentFichaData.estado_bateria = globalStatus;
+      currentFichaData.observaciones = obsVal;
+      currentFichaData.detalles = result.data?.detalles || detallesPayload;
+      if (window.cambiarTipoFicha) window.cambiarTipoFicha(currentFichaTipo || 'obra');
+    }
+
+    if (activeInspectionDetailData && activeInspectionDetailData.id == currentEditingInspection.id) {
+      activeInspectionDetailData.avance_global = globalPct;
+      activeInspectionDetailData.estado_bateria = globalStatus;
+      activeInspectionDetailData.observaciones = obsVal;
+      activeInspectionDetailData.detalles = result.data?.detalles || detallesPayload;
+    }
+
+    // Refrescar vistas
+    updateInspeccionesMetrics();
+    renderInspeccionesTable();
+
+    // Actualizar dashboards
+    try {
+      if (typeof renderExecutiveDashboard === 'function') renderExecutiveDashboard();
+      if (typeof loadReportesAdminPage === 'function') loadReportesAdminPage();
+    } catch (e) {}
+
+    closeModal('modal-edit-inspection-progress');
+    showToast(`🎉 ¡Avance de la visita #${currentEditingInspection.id} actualizado exitosamente a ${globalPct.toFixed(2)}%!`, 'success');
+  } catch (err) {
+    showToast('Error al guardar modificación de avance: ' + err.message, 'danger');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<span>💾 Guardar Modificación de Avance</span>';
+    }
+  }
+};
+
 let activeInspectionDetailData = null;
 
 window.openInspectionDetailAdmin = async function (inspeccionId) {
@@ -2016,6 +2340,13 @@ window.openInspectionDetailAdmin = async function (inspeccionId) {
       actGrid.innerHTML = `<div style="color: var(--text-muted); font-size: 0.82rem;">Sin desglose de actividades registrado.</div>`;
     }
 
+    const currentUser = window.authService ? window.authService.getCurrentUser() : null;
+    const isSuperAdmin = currentUser && (currentUser.rol === 'admin' || currentUser.rol_id === 1);
+    const btnEditDetail = document.getElementById('btn-admin-detail-edit-progress');
+    if (btnEditDetail) {
+      btnEditDetail.style.display = isSuperAdmin ? 'inline-flex' : 'none';
+    }
+
     document.getElementById('modal-inspection-detail-admin').classList.add('active');
   } catch (err) {
     showToast('Error al cargar detalle: ' + err.message, 'danger');
@@ -2025,6 +2356,14 @@ window.openInspectionDetailAdmin = async function (inspeccionId) {
 window.openFichaTecnicaFromDetail = function () {
   if (activeInspectionDetailData) {
     window.openFichaTecnica(activeInspectionDetailData);
+  }
+};
+
+window.openEditInspectionFromDetail = function () {
+  if (activeInspectionDetailData) {
+    const id = activeInspectionDetailData.id;
+    closeModal('modal-inspection-detail-admin');
+    window.openEditInspectionModal(id);
   }
 };
 
@@ -2077,17 +2416,23 @@ window.cambiarTipoFicha = function (tipo) {
     { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION' }
   ];
 
+  const defaultActNames = defaultActsFicha.map((act) => act.nombre);
+
   let detallesList = [];
   if (Array.isArray(currentFichaData.detalles) && currentFichaData.detalles.length > 0) {
     detallesList = currentFichaData.detalles;
   } else if (currentFichaData.actividadesScores) {
     detallesList = defaultActsFicha.map((act) => ({
+      id: act.id,
+      actividad_id: act.id,
       orden: act.orden,
       actividad_nombre: act.nombre,
       porcentaje: currentFichaData.actividadesScores[act.id] || 0
     }));
   } else {
     detallesList = defaultActsFicha.map((act) => ({
+      id: act.id,
+      actividad_id: act.id,
       orden: act.orden,
       actividad_nombre: act.nombre,
       porcentaje: currentFichaData.avance_global >= 99.9 ? 100 : 0
@@ -2137,9 +2482,10 @@ window.cambiarTipoFicha = function (tipo) {
     }
 
     // Filas para Obra (con badges verde oscuro / ámbar / rojo)
-    const rowsHtml = defaultActNames.map((name, idx) => {
-      const ord = idx + 1;
-      const det = detallesList.find((d) => (d.orden == ord) || (d.actividad_id == ord)) || detallesList[idx];
+    const rowsHtml = defaultActsFicha.map((act, idx) => {
+      const ord = act.orden;
+      const name = act.nombre;
+      const det = detallesList.find((d) => (d.actividad_id == act.id) || (d.orden == act.orden) || (d.actividad_nombre && d.actividad_nombre.toUpperCase() === name)) || detallesList[idx];
       const p = det ? parseInt(det.porcentaje, 10) || 0 : 0;
       
       let estadoBadge = `
@@ -2423,9 +2769,10 @@ window.cambiarTipoFicha = function (tipo) {
       btnInterv.style.fontWeight = '800';
     }
 
-    const rowsIntervHtml = defaultActNames.map((name, idx) => {
-      const ord = idx + 1;
-      const det = detallesList.find((d) => (d.orden == ord) || (d.actividad_id == ord)) || detallesList[idx];
+    const rowsIntervHtml = defaultActsFicha.map((act, idx) => {
+      const ord = act.orden;
+      const name = act.nombre;
+      const det = detallesList.find((d) => (d.actividad_id == act.id) || (d.orden == act.orden) || (d.actividad_nombre && d.actividad_nombre.toUpperCase() === name)) || detallesList[idx];
       const p = det ? parseInt(det.porcentaje, 10) || 0 : 0;
       
       let estadoTexto = 'No iniciado';

@@ -1837,8 +1837,120 @@
           </div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-inspection-detail-admin')">Cerrar</button>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <button type="button" id="btn-admin-detail-edit-progress" class="btn btn-warning" onclick="openEditInspectionFromDetail()" style="display: none; background: #d97706; color: white; border: 1px solid #b45309; font-weight: 600; font-size: 0.82rem; align-items: center; gap: 5px;">
+            ✏️ Editar Porcentajes de Avance
+          </button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-inspection-detail-admin')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====================================================================
+       MODAL 8: EDICIÓN DE PORCENTAJE DE AVANCE (MODO ADMINISTRADOR)
+       ==================================================================== -->
+  <div id="modal-edit-inspection-progress" class="modal-overlay">
+    <div class="modal-content" style="max-width: 860px; width: 95vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: white; border-bottom: 2px solid #f59e0b;">
+        <div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: #f59e0b; color: #1e293b; padding: 2px 7px; border-radius: 4px; font-weight: 800; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px;">ADMINISTRADOR</span>
+            <h3 style="color: white; margin: 0; font-size: 1.05rem;">✏️ Modificar Porcentajes de Avance de Inspección</h3>
+          </div>
+          <p id="edit-insp-modal-subtitle" style="font-size: 0.8rem; color: #cbd5e1; margin-top: 4px; margin-bottom: 0;">
+            Ajuste contractual de los 13 capítulos para corrección de inconsistencias de campo.
+          </p>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('modal-edit-inspection-progress')" style="background: rgba(255,255,255,0.15); color: white; border: none;">✕</button>
+      </div>
+
+      <div class="modal-body" style="max-height: 72vh; overflow-y: auto; padding: 1.25rem;">
+        <!-- Banner de Datos de la Visita -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.9rem 1rem; margin-bottom: 1rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem;">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Beneficiario</div>
+            <strong id="edit-insp-ben-nombre" style="font-size: 0.92rem; color: var(--text-primary); display: block;">—</strong>
+            <span id="edit-insp-ben-doc" style="font-size: 0.78rem; color: var(--text-secondary);">—</span>
+          </div>
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Ubicación & Fase</div>
+            <div id="edit-insp-ubicacion" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">—</div>
+            <div id="edit-insp-fase" style="font-size: 0.78rem; color: var(--text-muted);">—</div>
+          </div>
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Inspector Responsable</div>
+            <div id="edit-insp-inspector" style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">—</div>
+            <div id="edit-insp-fecha" style="font-size: 0.78rem; color: var(--text-muted);">—</div>
+          </div>
+        </div>
+
+        <!-- Tarjeta de Recálculo en Vivo de Avance Global -->
+        <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.03) 100%); border: 1.5px solid #f59e0b; border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.65rem;">
+            <div>
+              <div style="font-size: 0.75rem; font-weight: 800; color: #b45309; text-transform: uppercase; letter-spacing: 0.4px;">
+                ⚡ RECÁLCULO PONDERADO EN TIEMPO REAL
+              </div>
+              <div style="font-size: 0.82rem; color: var(--text-secondary);">
+                Avance Registrado Originalmente: <strong id="edit-insp-pct-original" style="color: var(--text-primary);">0.00%</strong>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <span id="edit-insp-estado-badge" class="badge badge-status-sin-iniciar" style="font-size: 0.8rem; padding: 4px 10px;">⚪ Sin Iniciar</span>
+              <div style="text-align: right;">
+                <div style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Nuevo Avance Global</div>
+                <strong id="edit-insp-pct-nuevo" style="font-size: 1.5rem; font-weight: 900; color: #d97706; line-height: 1;">0.00%</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Progreso Dinámica -->
+          <div style="height: 10px; background: rgba(0,0,0,0.08); border-radius: 6px; overflow: hidden; position: relative;">
+            <div id="edit-insp-progress-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #f59e0b, #10b981); transition: width 0.25s ease, background 0.3s ease;"></div>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">
+            <span>0% (Sin Iniciar)</span>
+            <span>50% (En Ejecución)</span>
+            <span>100% (Terminado)</span>
+          </div>
+        </div>
+
+        <!-- Listado Interactivo de las 13 Actividades -->
+        <div style="margin-bottom: 1.25rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.65rem;">
+            <strong style="font-size: 0.85rem; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.3px;">
+              🧱 Actividades Constructivas Contractuales (13 Capítulos)
+            </strong>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">
+              Suma de pesos: 100.00%
+            </span>
+          </div>
+
+          <div id="edit-insp-actividades-list" style="display: flex; flex-direction: column; gap: 0.65rem;">
+            <!-- Contenido dinámico de las 13 actividades -->
+          </div>
+        </div>
+
+        <!-- Observaciones de la Visita -->
+        <div>
+          <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-primary); display: block; margin-bottom: 0.35rem;">
+            📝 Observaciones Generales de la Visita (Corrección / Justificación):
+          </label>
+          <textarea id="edit-insp-observaciones-input" class="form-control" rows="3" style="width: 100%; font-size: 0.85rem; resize: vertical;" placeholder="Explica o actualiza las observaciones generales de esta visita..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; background: var(--bg-surface); border-top: 1px solid var(--border-color);">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-edit-inspection-progress')">
+          Cancelar
+        </button>
+        <button type="button" id="btn-save-edit-inspection" class="btn btn-primary" onclick="saveEditInspectionProgress()" style="background: #d97706; border-color: #b45309; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; padding: 6px 16px;">
+          <span>💾 Guardar Modificación de Avance</span>
+        </button>
       </div>
     </div>
   </div>

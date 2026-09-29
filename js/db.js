@@ -948,6 +948,103 @@ class DatabaseManager {
     });
   }
 
+  // Actualizar porcentajes de una inspección existente (Modo Administrador)
+  async updateInspeccion(inspeccionId, updatePayload) {
+    const id = parseInt(inspeccionId, 10);
+    let updatedOnline = false;
+    let serverData = null;
+
+    if (navigator.onLine) {
+      try {
+        const res = await fetch(`${API_URL}/inspecciones/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(updatePayload)
+        });
+        const json = await res.json();
+        if (res.ok && json.ok) {
+          updatedOnline = true;
+          serverData = json.data;
+        } else {
+          throw new Error(json.error || 'Error al actualizar en el servidor');
+        }
+      } catch (e) {
+        if (!navigator.onLine) {
+          console.log('Modo offline: actualizando localmente');
+        } else {
+          throw e;
+        }
+      }
+    }
+
+    // Actualizar en IndexedDB
+    await new Promise((resolve) => {
+      try {
+        const tx = this.db.transaction(['inspecciones', 'inspeccion_detalles'], 'readwrite');
+        const inspStore = tx.objectStore('inspecciones');
+        const detStore = tx.objectStore('inspeccion_detalles');
+
+        const reqInsp = inspStore.get(id);
+        reqInsp.onsuccess = () => {
+          const record = reqInsp.result;
+          if (record) {
+            if (serverData) {
+              record.avance_global = serverData.avance_global;
+              record.estado_bateria = serverData.estado_bateria;
+              if (serverData.observaciones !== undefined) record.observaciones = serverData.observaciones;
+            } else {
+              if (updatePayload.avance_global !== undefined) record.avance_global = updatePayload.avance_global;
+              if (updatePayload.estado_bateria !== undefined) record.estado_bateria = updatePayload.estado_bateria;
+              if (updatePayload.observaciones !== undefined) record.observaciones = updatePayload.observaciones;
+            }
+            record.sincronizado = updatedOnline ? 1 : 0;
+            inspStore.put(record);
+          }
+        };
+
+        if (Array.isArray(updatePayload.detalles)) {
+          const detIdx = detStore.index('inspeccion_id');
+          const reqAll = detIdx.getAll(id);
+          reqAll.onsuccess = () => {
+            const items = reqAll.result || [];
+            for (const d of updatePayload.detalles) {
+              const actId = parseInt(d.actividad_id, 10);
+              const found = items.find((it) => it.actividad_id === actId);
+              const pct = parseInt(d.porcentaje, 10) || 0;
+              const estado = pct >= 100 ? 'TERMINADO' : (pct > 0 ? 'EN_EJECUCION' : 'SIN_INICIAR');
+              if (found) {
+                found.porcentaje = pct;
+                found.estado_actividad = estado;
+                if (d.observacion_item !== undefined) found.observacion_item = d.observacion_item;
+                detStore.put(found);
+              } else {
+                detStore.add({
+                  inspeccion_id: id,
+                  actividad_id: actId,
+                  porcentaje: pct,
+                  estado_actividad: estado,
+                  peso_porcentual: d.peso_porcentual || 7.69,
+                  observacion_item: d.observacion_item || null
+                });
+              }
+            }
+          };
+        }
+
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(true);
+      } catch (err) {
+        resolve(true);
+      }
+    });
+
+    return {
+      ok: true,
+      updatedOnline,
+      data: serverData || { id, ...updatePayload }
+    };
+  }
+
   async deleteInspeccion(inspeccionId) {
     const id = parseInt(inspeccionId, 10);
     // 1. Eliminar en IndexedDB local (inspección y detalles)
