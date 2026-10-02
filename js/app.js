@@ -2459,8 +2459,12 @@ window.cambiarTipoFicha = function (tipo) {
   const hasPhotos = validFotos.length > 0;
 
   const placeholderSvg = `<svg width="54" height="44" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="#cbd5e1" fill="#f8fafc"/><circle cx="8.5" cy="8.5" r="1.8" fill="#cbd5e1"/><path d="M21 15l-5-5L5 21" stroke="#cbd5e1" fill="none"/><path d="M15 15l-2-2-4 4" stroke="#cbd5e1" fill="none"/></svg>`;
+  // Ficha de Obra: Primeras 2 fotos (índice 0 y 1)
   const foto1Html = validFotos[0] ? `<img src="${validFotos[0]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
   const foto2Html = validFotos[1] ? `<img src="${validFotos[1]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
+  // Ficha de Interventoría: Las otras 2 fotos (índice 2 y 3)
+  const foto3Html = validFotos[2] ? `<img src="${validFotos[2]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
+  const foto4Html = validFotos[3] ? `<img src="${validFotos[3]}" style="width: 100%; height: 100%; object-fit: contain; border-radius: 4px;">` : placeholderSvg;
 
   const globalAvance = parseFloat(currentFichaData.avance_global) || 0;
   let genStatus = 'Sin Iniciar';
@@ -2805,24 +2809,24 @@ window.cambiarTipoFicha = function (tipo) {
         </div>
         <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; padding: 6px 8px; margin-top: -1px; background: #ffffff;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-            <!-- Foto 1 -->
+            <!-- Foto 1 Interventoría (Evidencia 3) -->
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: inline-flex; align-items: center; gap: 4px;">
                 <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
                 <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Vista General</div>
               </div>
               <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
-                ${foto1Html}
+                ${foto3Html}
               </div>
             </div>
-            <!-- Foto 2 -->
+            <!-- Foto 2 Interventoría (Evidencia 4) -->
             <div style="display: flex; flex-direction: column; gap: 3px;">
               <div style="display: inline-flex; align-items: center; gap: 4px;">
                 <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</div>
                 <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Excavación</div>
               </div>
               <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
-                ${foto2Html}
+                ${foto4Html}
               </div>
             </div>
           </div>
