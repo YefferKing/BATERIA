@@ -3825,25 +3825,121 @@ window.exportExcelConsolidadoTerritorial = async function () {
   await window.exportExcelBalanceMunicipios();
 };
 
-// 5. Exportadores para la Pestaña de Reportes
+// 5. Exportadores para la Pestaña de Reportes (Con Soporte Completo de Multi-Filtros Reactivos)
+
+function hasActiveReportFilters() {
+  const search = document.getElementById('report-filter-search')?.value?.trim();
+  const fase = document.getElementById('report-filter-fase')?.value;
+  const mun = document.getElementById('report-filter-municipio')?.value;
+  const vereda = document.getElementById('report-filter-vereda')?.value;
+  const inspector = document.getElementById('report-filter-inspector')?.value;
+  const estado = document.getElementById('report-filter-estado')?.value;
+  const fDesde = document.getElementById('report-filter-fecha-desde')?.value;
+  const fHasta = document.getElementById('report-filter-fecha-hasta')?.value;
+  return Boolean(search || fase || mun || vereda || inspector || estado || fDesde || fHasta);
+}
+
+function getActiveReportFiltersSummary() {
+  const filters = [];
+  const search = document.getElementById('report-filter-search')?.value?.trim();
+  const fase = document.getElementById('report-filter-fase')?.value;
+  const mun = document.getElementById('report-filter-municipio')?.value;
+  const vereda = document.getElementById('report-filter-vereda')?.value;
+  const inspector = document.getElementById('report-filter-inspector')?.value;
+  const estado = document.getElementById('report-filter-estado')?.value;
+  const fDesde = document.getElementById('report-filter-fecha-desde')?.value;
+  const fHasta = document.getElementById('report-filter-fecha-hasta')?.value;
+
+  if (fDesde && fHasta) filters.push(`Rango Visita: ${fDesde} a ${fHasta}`);
+  else if (fDesde) filters.push(`Visita Desde: ${fDesde}`);
+  else if (fHasta) filters.push(`Visita Hasta: ${fHasta}`);
+
+  if (fase) filters.push(`Fase ${fase}`);
+  if (mun) filters.push(`Municipio: ${mun}`);
+  if (vereda) filters.push(`Vereda: ${vereda}`);
+  if (inspector) filters.push(`Inspector: ${inspector}`);
+  if (estado) {
+    const estadoLabels = { 'TERMINADO': 'Terminadas (100%)', 'EN_EJECUCION': 'En Ejecución (1%-99%)', 'SIN_INICIAR': 'Sin Iniciar (0%)' };
+    filters.push(`Estado: ${estadoLabels[estado] || estado}`);
+  }
+  if (search) filters.push(`Búsqueda: "${search}"`);
+
+  return filters.length > 0 ? filters.join(' • ') : 'Todos los registros (Sin filtros aplicados)';
+}
+
 window.exportExcelReporteEstados = async function () {
-  await window.exportExcelDashboardEstados();
-};
+  const hasFilters = hasActiveReportFilters();
+  let dataset = reportFilteredData;
+  if ((!dataset || dataset.length === 0) && hasFilters) {
+    showToast('⚠️ No se encontraron registros que coincidan con los filtros seleccionados para exportar.', 'warning');
+    return;
+  }
+  if (!dataset || dataset.length === 0) {
+    dataset = reportBeneficiariosData;
+  }
+  if (!dataset || dataset.length === 0) {
+    showToast('No hay datos disponibles para exportar', 'warning');
+    return;
+  }
 
-window.exportExcelReporteSegmentos = async function () {
-  await window.exportExcelComparativoFases();
-};
+  const total = dataset.length;
+  const sinIniciar = dataset.filter((b) => b.estado === 'SIN_INICIAR' || (parseFloat(b.avance) || 0) === 0).length;
+  const ejecucion = dataset.filter((b) => (b.estado === 'EN_EJECUCION' || (parseFloat(b.avance) || 0) > 0) && (parseFloat(b.avance) || 0) < 99.9).length;
+  const terminadas = dataset.filter((b) => b.estado === 'TERMINADO' || (parseFloat(b.avance) || 0) >= 99.9).length;
+  const sumAvance = dataset.reduce((acc, b) => acc + (parseFloat(b.avance) || 0), 0);
+  const avgAvance = total > 0 ? (sumAvance / total) : 0;
 
-window.exportExcelReporteVeredas = async function () {
-  const select = document.getElementById('chart-veredas-municipio-select');
-  const munName = select ? select.value : 'TODOS';
-  const allBen = await window.dbManager.getBeneficiarios();
-  const filtered = allBen.filter(b => munName === 'TODOS' || (b.municipio || '').toUpperCase() === munName.toUpperCase());
+  const filtersSummary = getActiveReportFiltersSummary();
 
   const html = `
-    <div class="title">REPORTE DETALLADO POR VEREDAS: ${escapeHtml(munName)}</div>
-    <div class="subtitle">Total Registros: ${filtered.length} - Generado el ${new Date().toLocaleString('es-CO')}</div>
+    <div class="title">REPORTE DETALLADO: PROPORCIÓN DE ESTADOS CONSTRUCTIVOS (FILTRADO)</div>
+    <div class="subtitle">
+      <strong>Filtros Aplicados:</strong> ${escapeHtml(filtersSummary)}<br>
+      Total Registros: ${total} | Generado el ${new Date().toLocaleString('es-CO')}
+    </div>
 
+    <div class="section-header" style="color: #065f46;">📊 RESUMEN EJECUTIVO DE ESTADOS</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Estado Constructivo</th>
+          <th>Rango de Avance</th>
+          <th>Cantidad de Baterías</th>
+          <th>Porcentaje (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="badge-term">🟢 Terminadas</td>
+          <td class="center">100%</td>
+          <td class="num"><strong>${terminadas}</strong></td>
+          <td class="num"><strong>${(total > 0 ? (terminadas / total) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td class="badge-ejec">🟠 En Ejecución</td>
+          <td class="center">1% - 99.9%</td>
+          <td class="num"><strong>${ejecucion}</strong></td>
+          <td class="num"><strong>${(total > 0 ? (ejecucion / total) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr>
+          <td class="badge-sin">⚪ Sin Iniciar</td>
+          <td class="center">0%</td>
+          <td class="num"><strong>${sinIniciar}</strong></td>
+          <td class="num"><strong>${(total > 0 ? (sinIniciar / total) * 100 : 0).toFixed(2)}%</strong></td>
+        </tr>
+        <tr class="total-row">
+          <td colspan="2">TOTAL BATERÍAS FILTRADAS</td>
+          <td class="num">${total}</td>
+          <td class="num">100.00%</td>
+        </tr>
+        <tr style="background:#e0f2fe; font-weight:bold;">
+          <td colspan="2" style="color:#0369a1;">AVANCE FÍSICO PROMEDIO PONDERADO</td>
+          <td colspan="2" class="num" style="color:#0369a1; font-size:11pt;">${avgAvance.toFixed(2)}%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-header" style="color: #065f46; margin-top: 15px;">📋 DETALLE INDIVIDUAL DE BENEFICIARIOS (${dataset.length})</div>
     <table>
       <thead>
         <tr>
@@ -3853,19 +3949,365 @@ window.exportExcelReporteVeredas = async function () {
           <th>Municipio</th>
           <th>Vereda</th>
           <th>Fase</th>
+          <th>% Avance Físico</th>
+          <th>Estado</th>
+          <th>Inspector Asignado</th>
+          <th>Fecha Última Visita</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataset.map((b, idx) => {
+          const prog = parseFloat(b.avance) || 0;
+          let estadoLabel = 'Sin Iniciar';
+          let estadoCls = 'badge-sin';
+          if (prog >= 99.9 || b.estado === 'TERMINADO') {
+            estadoLabel = 'Terminada';
+            estadoCls = 'badge-term';
+          } else if (prog > 0 || b.estado === 'EN_EJECUCION') {
+            estadoLabel = 'En Ejecución';
+            estadoCls = 'badge-ejec';
+          }
+          const fechaStr = b.fecha_visita ? new Date(b.fecha_visita).toLocaleString('es-CO') : 'Sin Visita';
+
+          return `
+            <tr>
+              <td class="center">${idx + 1}</td>
+              <td style="mso-number-format:'\\@';"><code>${escapeHtml(b.documento || '')}</code></td>
+              <td><strong>${escapeHtml(b.nombre || '')}</strong></td>
+              <td>${escapeHtml(b.municipio || '')}</td>
+              <td>${escapeHtml(b.vereda || '')}</td>
+              <td class="center">Fase ${escapeHtml(b.fase || '1')}</td>
+              <td class="num"><strong>${prog.toFixed(2)}%</strong></td>
+              <td class="${estadoCls}">${estadoLabel}</td>
+              <td>${escapeHtml(b.inspector || 'Sin Asignar')}</td>
+              <td class="center">${fechaStr}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('reporte_estados_filtrados', 'Proporcion Estados', html);
+};
+
+window.exportExcelReporteSegmentos = async function () {
+  const hasFilters = hasActiveReportFilters();
+  let dataset = reportFilteredData;
+  if ((!dataset || dataset.length === 0) && hasFilters) {
+    showToast('⚠️ No se encontraron registros que coincidan con los filtros seleccionados para exportar.', 'warning');
+    return;
+  }
+  if (!dataset || dataset.length === 0) {
+    dataset = reportBeneficiariosData;
+  }
+  if (!dataset || dataset.length === 0) {
+    showToast('No hay datos disponibles para exportar', 'warning');
+    return;
+  }
+
+  const selectedMun = document.getElementById('report-filter-municipio')?.value || '';
+  const selectedInsp = document.getElementById('report-filter-inspector')?.value || '';
+  let groupingKey = 'municipio';
+  let groupingLabel = 'Municipio';
+  if (selectedMun) {
+    groupingKey = 'vereda';
+    groupingLabel = `Vereda (${selectedMun})`;
+  } else if (selectedInsp) {
+    groupingKey = 'vereda';
+    groupingLabel = `Vereda (${selectedInsp})`;
+  }
+
+  // Agrupar datos filtrados
+  const groupMap = {};
+  dataset.forEach((b) => {
+    const k = (b[groupingKey] || 'Sin Definir').trim().toUpperCase();
+    if (!groupMap[k]) {
+      groupMap[k] = {
+        name: k,
+        total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0,
+        f1: { total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0 },
+        f2: { total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sum: 0 }
+      };
+    }
+    const avance = parseFloat(b.avance) || 0;
+    const faseKey = b.fase === 2 || String(b.fase) === '2' ? 'f2' : 'f1';
+
+    groupMap[k].total++;
+    groupMap[k].sum += avance;
+    groupMap[k][faseKey].total++;
+    groupMap[k][faseKey].sum += avance;
+
+    if (avance >= 99.9 || b.estado === 'TERMINADO') {
+      groupMap[k].terminadas++;
+      groupMap[k][faseKey].terminadas++;
+    } else if (avance > 0 || b.estado === 'EN_EJECUCION') {
+      groupMap[k].ejecucion++;
+      groupMap[k][faseKey].ejecucion++;
+    } else {
+      groupMap[k].sinIniciar++;
+      groupMap[k][faseKey].sinIniciar++;
+    }
+  });
+
+  const allGroups = Object.values(groupMap);
+  const f1List = allGroups.filter(g => g.f1.total > 0).sort((a, b) => (b.f1.terminadas / b.f1.total) - (a.f1.terminadas / a.f1.total) || a.name.localeCompare(b.name, 'es'));
+  const f2List = allGroups.filter(g => g.f2.total > 0).sort((a, b) => (b.f2.terminadas / b.f2.total) - (a.f2.terminadas / a.f2.total) || a.name.localeCompare(b.name, 'es'));
+
+  const sumF1Tot = f1List.reduce((acc, g) => acc + g.f1.total, 0);
+  const sumF1Term = f1List.reduce((acc, g) => acc + g.f1.terminadas, 0);
+  const sumF1Ejec = f1List.reduce((acc, g) => acc + g.f1.ejecucion, 0);
+  const sumF1Sin = f1List.reduce((acc, g) => acc + g.f1.sinIniciar, 0);
+
+  const sumF2Tot = f2List.reduce((acc, g) => acc + g.f2.total, 0);
+  const sumF2Term = f2List.reduce((acc, g) => acc + g.f2.terminadas, 0);
+  const sumF2Ejec = f2List.reduce((acc, g) => acc + g.f2.ejecucion, 0);
+  const sumF2Sin = f2List.reduce((acc, g) => acc + g.f2.sinIniciar, 0);
+
+  const filtersSummary = getActiveReportFiltersSummary();
+
+  const html = `
+    <div class="title">BALANCE DE BATERÍAS TERMINADAS (FILTRADO POR FASE 1 Y FASE 2)</div>
+    <div class="subtitle">
+      <strong>Filtros Aplicados:</strong> ${escapeHtml(filtersSummary)}<br>
+      Total Registros Filtrados: ${dataset.length} | Generado el ${new Date().toLocaleString('es-CO')}
+    </div>
+
+    ${f1List.length > 0 ? `
+    <div class="section-header" style="color:#0284c7;">🔵 FASE 1: BATERÍAS TERMINADAS POR ${groupingLabel.toUpperCase()}</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="th-blue">${groupingLabel}</th>
+          <th class="th-blue">Total Asignadas</th>
+          <th class="th-blue">Terminadas</th>
+          <th class="th-blue">% Terminadas</th>
+          <th class="th-blue">En Ejecución</th>
+          <th class="th-blue">Sin Iniciar</th>
+          <th class="th-blue">% Avance Promedio</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${f1List.map(g => {
+          const pctTerm = g.f1.total > 0 ? ((g.f1.terminadas / g.f1.total) * 100).toFixed(1) : '0.0';
+          const avgAdv = g.f1.total > 0 ? (g.f1.sum / g.f1.total).toFixed(1) : '0.0';
+          return `
+            <tr>
+              <td><strong>${escapeHtml(g.name)}</strong></td>
+              <td class="num">${g.f1.total}</td>
+              <td class="num" style="color:#059669; font-weight:bold;">${g.f1.terminadas}</td>
+              <td class="num" style="font-weight:bold;">${pctTerm}%</td>
+              <td class="num">${g.f1.ejecucion}</td>
+              <td class="num">${g.f1.sinIniciar}</td>
+              <td class="num">${avgAdv}%</td>
+            </tr>
+          `;
+        }).join('')}
+        <tr class="total-row">
+          <td>SUBTOTAL FASE 1</td>
+          <td class="num">${sumF1Tot}</td>
+          <td class="num" style="color:#059669;">${sumF1Term}</td>
+          <td class="num">${sumF1Tot > 0 ? ((sumF1Term / sumF1Tot) * 100).toFixed(1) : '0.0'}%</td>
+          <td class="num">${sumF1Ejec}</td>
+          <td class="num">${sumF1Sin}</td>
+          <td class="num">${sumF1Tot > 0 ? (f1List.reduce((acc, g) => acc + g.f1.sum, 0) / sumF1Tot).toFixed(1) : '0.0'}%</td>
+        </tr>
+      </tbody>
+    </table>
+    ` : ''}
+
+    ${f2List.length > 0 ? `
+    <div class="section-header" style="color:#7c3aed; margin-top:15px;">🟣 FASE 2: BATERÍAS TERMINADAS POR ${groupingLabel.toUpperCase()}</div>
+    <table>
+      <thead>
+        <tr>
+          <th class="th-purple">${groupingLabel}</th>
+          <th class="th-purple">Total Asignadas</th>
+          <th class="th-purple">Terminadas</th>
+          <th class="th-purple">% Terminadas</th>
+          <th class="th-purple">En Ejecución</th>
+          <th class="th-purple">Sin Iniciar</th>
+          <th class="th-purple">% Avance Promedio</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${f2List.map(g => {
+          const pctTerm = g.f2.total > 0 ? ((g.f2.terminadas / g.f2.total) * 100).toFixed(1) : '0.0';
+          const avgAdv = g.f2.total > 0 ? (g.f2.sum / g.f2.total).toFixed(1) : '0.0';
+          return `
+            <tr>
+              <td><strong>${escapeHtml(g.name)}</strong></td>
+              <td class="num">${g.f2.total}</td>
+              <td class="num" style="color:#059669; font-weight:bold;">${g.f2.terminadas}</td>
+              <td class="num" style="font-weight:bold;">${pctTerm}%</td>
+              <td class="num">${g.f2.ejecucion}</td>
+              <td class="num">${g.f2.sinIniciar}</td>
+              <td class="num">${avgAdv}%</td>
+            </tr>
+          `;
+        }).join('')}
+        <tr class="total-row">
+          <td>SUBTOTAL FASE 2</td>
+          <td class="num">${sumF2Tot}</td>
+          <td class="num" style="color:#059669;">${sumF2Term}</td>
+          <td class="num">${sumF2Tot > 0 ? ((sumF2Term / sumF2Tot) * 100).toFixed(1) : '0.0'}%</td>
+          <td class="num">${sumF2Ejec}</td>
+          <td class="num">${sumF2Sin}</td>
+          <td class="num">${sumF2Tot > 0 ? (f2List.reduce((acc, g) => acc + g.f2.sum, 0) / sumF2Tot).toFixed(1) : '0.0'}%</td>
+        </tr>
+      </tbody>
+    </table>
+    ` : ''}
+
+    <div class="section-header" style="color: #065f46; margin-top: 15px;">📋 DETALLE DE BENEFICIARIOS FILTRADOS (${dataset.length})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cédula</th>
+          <th>Nombre del Beneficiario</th>
+          <th>Municipio</th>
+          <th>Vereda</th>
+          <th>Fase</th>
+          <th>% Avance</th>
+          <th>Estado</th>
           <th>Inspector</th>
+          <th>Fecha Última Visita</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataset.map((b, idx) => `
+          <tr>
+            <td class="center">${idx + 1}</td>
+            <td style="mso-number-format:'\\@';"><code>${escapeHtml(b.documento || '')}</code></td>
+            <td><strong>${escapeHtml(b.nombre || '')}</strong></td>
+            <td>${escapeHtml(b.municipio || '')}</td>
+            <td>${escapeHtml(b.vereda || '')}</td>
+            <td class="center">Fase ${escapeHtml(b.fase || '1')}</td>
+            <td class="num"><strong>${Number(b.avance || 0).toFixed(2)}%</strong></td>
+            <td class="${b.estado === 'TERMINADO' ? 'badge-term' : b.estado === 'EN_EJECUCION' ? 'badge-ejec' : 'badge-sin'}">${b.estado === 'TERMINADO' ? 'Terminada' : b.estado === 'EN_EJECUCION' ? 'En Ejecución' : 'Sin Iniciar'}</td>
+            <td>${escapeHtml(b.inspector || 'Sin Asignar')}</td>
+            <td class="center">${b.fecha_visita ? new Date(b.fecha_visita).toLocaleString('es-CO') : 'Sin Visita'}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  window.downloadExcelFromHtml('balance_terminadas_filtrado', 'Balance Fases', html);
+};
+
+window.exportExcelReporteVeredas = async function () {
+  const select = document.getElementById('chart-veredas-municipio-select');
+  const munName = select ? select.value : 'TODOS';
+
+  const hasFilters = hasActiveReportFilters();
+  let baseData = reportFilteredData;
+  if ((!baseData || baseData.length === 0) && hasFilters) {
+    showToast('⚠️ No se encontraron registros que coincidan con los filtros seleccionados para exportar.', 'warning');
+    return;
+  }
+  if (!baseData || baseData.length === 0) {
+    baseData = reportBeneficiariosData;
+  }
+
+  const filtered = baseData.filter(b => munName === 'TODOS' || (b.municipio || '').toUpperCase() === munName.toUpperCase());
+
+  if (filtered.length === 0) {
+    showToast(`No hay registros para exportar en el municipio ${munName} con los filtros activos.`, 'warning');
+    return;
+  }
+
+  // Agrupar por Vereda
+  const veredasMap = {};
+  filtered.forEach((b) => {
+    const vName = b.vereda || 'Sin Vereda';
+    if (!veredasMap[vName]) {
+      veredasMap[vName] = { nombre: vName, total: 0, terminadas: 0, ejecucion: 0, sinIniciar: 0, sumAvance: 0, inspectores: new Set() };
+    }
+    const item = veredasMap[vName];
+    item.total++;
+    const av = parseFloat(b.avance) || 0;
+    item.sumAvance += av;
+    if (b.estado === 'TERMINADO' || av >= 99.9) item.terminadas++;
+    else if (b.estado === 'EN_EJECUCION' || av > 0) item.ejecucion++;
+    else item.sinIniciar++;
+    if (b.inspector && b.inspector !== 'Sin Asignar') item.inspectores.add(b.inspector);
+  });
+
+  const veredasSummary = Object.values(veredasMap).sort((a, b) => (b.sumAvance / b.total) - (a.sumAvance / a.total));
+  const filtersSummary = getActiveReportFiltersSummary();
+
+  const html = `
+    <div class="title">REPORTE DETALLADO POR VEREDAS: ${escapeHtml(munName)}</div>
+    <div class="subtitle">
+      <strong>Filtros Aplicados:</strong> ${escapeHtml(filtersSummary)}<br>
+      Total Registros Filtrados: ${filtered.length} | Generado el ${new Date().toLocaleString('es-CO')}
+    </div>
+
+    <div class="section-header" style="color: #065f46;">🗺️ RESUMEN POR VEREDA EN ${escapeHtml(munName)}</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Vereda</th>
+          <th>Total Baterías</th>
+          <th>Terminadas</th>
+          <th>% Terminadas</th>
+          <th>En Ejecución</th>
+          <th>Sin Iniciar</th>
+          <th>% Avance Promedio</th>
+          <th>Inspectores en Zona</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${veredasSummary.map(v => {
+          const pctTerm = v.total > 0 ? ((v.terminadas / v.total) * 100).toFixed(1) : '0.0';
+          const avgAdv = v.total > 0 ? (v.sumAvance / v.total).toFixed(1) : '0.0';
+          return `
+            <tr>
+              <td><strong>${escapeHtml(v.nombre)}</strong></td>
+              <td class="num">${v.total}</td>
+              <td class="num" style="color:#059669; font-weight:bold;">${v.terminadas}</td>
+              <td class="num" style="font-weight:bold;">${pctTerm}%</td>
+              <td class="num">${v.ejecucion}</td>
+              <td class="num">${v.sinIniciar}</td>
+              <td class="num">${avgAdv}%</td>
+              <td>${escapeHtml(Array.from(v.inspectores).join(', ') || 'Sin Asignar')}</td>
+            </tr>
+          `;
+        }).join('')}
+      </tbody>
+    </table>
+
+    <div class="section-header" style="color: #065f46; margin-top: 15px;">📋 LISTADO INDIVIDUAL DE BENEFICIARIOS (${filtered.length})</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cédula</th>
+          <th>Nombre del Beneficiario</th>
+          <th>Municipio</th>
+          <th>Vereda</th>
+          <th>Fase</th>
+          <th>% Avance</th>
+          <th>Estado</th>
+          <th>Inspector</th>
+          <th>Fecha Última Visita</th>
         </tr>
       </thead>
       <tbody>
         ${filtered.map((b, idx) => `
           <tr>
             <td class="center">${idx + 1}</td>
-            <td><code>${b.documento}</code></td>
-            <td><strong>${escapeHtml(b.nombre)}</strong></td>
-            <td>${escapeHtml(b.municipio)}</td>
-            <td>${escapeHtml(b.vereda)}</td>
-            <td class="center">${b.fase === 2 ? 'Fase 2' : 'Fase 1'}</td>
-            <td>${escapeHtml(b.inspector_nombre || 'Sin Asignar')}</td>
+            <td style="mso-number-format:'\\@';"><code>${escapeHtml(b.documento || '')}</code></td>
+            <td><strong>${escapeHtml(b.nombre || '')}</strong></td>
+            <td>${escapeHtml(b.municipio || '')}</td>
+            <td>${escapeHtml(b.vereda || '')}</td>
+            <td class="center">Fase ${escapeHtml(b.fase || '1')}</td>
+            <td class="num"><strong>${Number(b.avance || 0).toFixed(2)}%</strong></td>
+            <td class="${b.estado === 'TERMINADO' ? 'badge-term' : b.estado === 'EN_EJECUCION' ? 'badge-ejec' : 'badge-sin'}">${b.estado === 'TERMINADO' ? 'Terminada' : b.estado === 'EN_EJECUCION' ? 'En Ejecución' : 'Sin Iniciar'}</td>
+            <td>${escapeHtml(b.inspector || 'Sin Asignar')}</td>
+            <td class="center">${b.fecha_visita ? new Date(b.fecha_visita).toLocaleString('es-CO') : 'Sin Visita'}</td>
           </tr>
         `).join('')}
       </tbody>
@@ -3876,34 +4318,168 @@ window.exportExcelReporteVeredas = async function () {
 };
 
 window.exportExcelReporteActividades = async function () {
-  const activities = await window.dbManager.getActividades();
-  const html = `
-    <div class="title">REPORTE DETALLADO: AVANCE POR 13 ACTIVIDADES CONSTRUCTIVAS</div>
-    <div class="subtitle">Ponderación Oficial de Capítulos de Obra - Generado el ${new Date().toLocaleString('es-CO')}</div>
+  const hasFilters = hasActiveReportFilters();
+  let dataset = reportFilteredData;
+  if ((!dataset || dataset.length === 0) && hasFilters) {
+    showToast('⚠️ No se encontraron registros que coincidan con los filtros seleccionados para exportar.', 'warning');
+    return;
+  }
+  if (!dataset || dataset.length === 0) {
+    dataset = reportBeneficiariosData;
+  }
+  if (!dataset || dataset.length === 0) {
+    showToast('No hay datos disponibles para exportar', 'warning');
+    return;
+  }
 
+  const defaultActs = [
+    { id: 1, orden: 1, nombre: 'PRELIMINARES', peso_porcentual: 0.169 },
+    { id: 6, orden: 2, nombre: 'REDES SANITARIAS', peso_porcentual: 9.243 },
+    { id: 2, orden: 3, nombre: 'CIMENTACION', peso_porcentual: 10.024 },
+    { id: 3, orden: 4, nombre: 'MAMPOSTERIA', peso_porcentual: 3.608 },
+    { id: 4, orden: 5, nombre: 'ESTRUCTURA', peso_porcentual: 8.490 },
+    { id: 5, orden: 6, nombre: 'CUBIERTA', peso_porcentual: 6.159 },
+    { id: 7, orden: 7, nombre: 'INSTALACIONES HIDRAULICAS', peso_porcentual: 6.813 },
+    { id: 8, orden: 8, nombre: 'INSTALACIONES ELECTRICAS', peso_porcentual: 1.965 },
+    { id: 9, orden: 9, nombre: 'PAÑETE-PINTURA', peso_porcentual: 12.000 },
+    { id: 10, orden: 10, nombre: 'ENCHAPE', peso_porcentual: 5.058 },
+    { id: 11, orden: 11, nombre: 'CARPINTERIA METALICA', peso_porcentual: 3.181 },
+    { id: 12, orden: 12, nombre: 'TANQUE SEPTICO', peso_porcentual: 29.617 },
+    { id: 13, orden: 13, nombre: 'CAMPO DE INFILTRACION', peso_porcentual: 3.673 }
+  ];
+
+  const total = dataset.length;
+  const actReportData = defaultActs.map((act) => {
+    let sumPct = 0;
+    let countTerm = 0;
+    let countEjec = 0;
+    let countSin = 0;
+
+    dataset.forEach((b) => {
+      let score = 0;
+      if (b.actividadesScores && b.actividadesScores[act.id] !== undefined) {
+        score = parseInt(b.actividadesScores[act.id], 10) || 0;
+      }
+      sumPct += score;
+      if (score >= 99.9) countTerm++;
+      else if (score > 0) countEjec++;
+      else countSin++;
+    });
+
+    const avg = total > 0 ? (sumPct / total) : 0;
+    const aportePonderado = (avg * act.peso_porcentual) / 100;
+    return {
+      ...act,
+      avg: parseFloat(avg.toFixed(2)),
+      aportePonderado: parseFloat(aportePonderado.toFixed(3)),
+      terminadas: countTerm,
+      en_ejecucion: countEjec,
+      sin_iniciar: countSin
+    };
+  });
+
+  const sumAporteTotal = actReportData.reduce((acc, a) => acc + a.aportePonderado, 0);
+  const filtersSummary = getActiveReportFiltersSummary();
+
+  const html = `
+    <div class="title">REPORTE DETALLADO: AVANCE POR 13 ACTIVIDADES CONSTRUCTIVAS (FILTRADO)</div>
+    <div class="subtitle">
+      <strong>Filtros Aplicados:</strong> ${escapeHtml(filtersSummary)}<br>
+      Total Registros: ${total} | Generado el ${new Date().toLocaleString('es-CO')}
+    </div>
+
+    <div class="section-header" style="color: #065f46;">🧱 RESUMEN DE PROGRESO POR CAPÍTULO DE OBRA</div>
     <table>
       <thead>
         <tr>
           <th># Ítem</th>
           <th>Capítulo / Actividad Constructiva</th>
-          <th>Peso / Ponderación Oficial</th>
-          <th>Descripción</th>
+          <th>Ponderación Oficial</th>
+          <th>% Avance Promedio</th>
+          <th>Aporte al Avance Global</th>
+          <th>Terminadas (100%)</th>
+          <th>En Ejecución (1-99%)</th>
+          <th>Sin Iniciar (0%)</th>
         </tr>
       </thead>
       <tbody>
-        ${(activities || []).map(a => `
+        ${actReportData.map(a => `
           <tr>
             <td class="center"><strong>${a.orden}</strong></td>
             <td><strong>${escapeHtml(a.nombre)}</strong></td>
-            <td class="num"><strong>${a.ponderacion}%</strong></td>
-            <td>${escapeHtml(a.descripcion || '--')}</td>
+            <td class="num"><strong>${Number(a.peso_porcentual).toFixed(3)}%</strong></td>
+            <td class="num" style="color:${a.avg >= 99.9 ? '#059669' : a.avg > 0 ? '#ea580c' : '#64748b'}; font-weight:bold;">${a.avg.toFixed(2)}%</td>
+            <td class="num"><strong>${a.aportePonderado.toFixed(3)}%</strong></td>
+            <td class="num" style="color:#059669;">${a.terminadas}</td>
+            <td class="num" style="color:#ea580c;">${a.en_ejecucion}</td>
+            <td class="num" style="color:#64748b;">${a.sin_iniciar}</td>
           </tr>
         `).join('')}
+        <tr class="total-row">
+          <td colspan="2">TOTAL PONDERADO CONSTRUCTIVO</td>
+          <td class="num">100.000%</td>
+          <td class="center">--</td>
+          <td class="num" style="color:#059669; font-size:11pt;">${sumAporteTotal.toFixed(2)}%</td>
+          <td colspan="3" class="center">Calculado sobre ${total} beneficiarios filtrados</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-header" style="color: #065f46; margin-top: 15px;">📋 MATRIZ DETALLADA POR BENEFICIARIO Y ACTIVIDAD</div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Cédula</th>
+          <th>Beneficiario</th>
+          <th>Municipio</th>
+          <th>% Global</th>
+          <th>1. Prelim</th>
+          <th>2. R.Sanit</th>
+          <th>3. Ciment</th>
+          <th>4. Mampost</th>
+          <th>5. Estruct</th>
+          <th>6. Cubiert</th>
+          <th>7. I.Hidr</th>
+          <th>8. I.Elec</th>
+          <th>9. Pañete</th>
+          <th>10. Enchap</th>
+          <th>11. C.Metal</th>
+          <th>12. T.Sept</th>
+          <th>13. C.Infilt</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${dataset.map((b, idx) => {
+          const sc = b.actividadesScores || {};
+          return `
+            <tr>
+              <td class="center">${idx + 1}</td>
+              <td style="mso-number-format:'\\@';"><code>${escapeHtml(b.documento || '')}</code></td>
+              <td><strong>${escapeHtml(b.nombre || '')}</strong></td>
+              <td>${escapeHtml(b.municipio || '')}</td>
+              <td class="num"><strong>${Number(b.avance || 0).toFixed(2)}%</strong></td>
+              <td class="center">${sc[1] !== undefined ? sc[1] + '%' : '0%'}</td>
+              <td class="center">${sc[6] !== undefined ? sc[6] + '%' : '0%'}</td>
+              <td class="center">${sc[2] !== undefined ? sc[2] + '%' : '0%'}</td>
+              <td class="center">${sc[3] !== undefined ? sc[3] + '%' : '0%'}</td>
+              <td class="center">${sc[4] !== undefined ? sc[4] + '%' : '0%'}</td>
+              <td class="center">${sc[5] !== undefined ? sc[5] + '%' : '0%'}</td>
+              <td class="center">${sc[7] !== undefined ? sc[7] + '%' : '0%'}</td>
+              <td class="center">${sc[8] !== undefined ? sc[8] + '%' : '0%'}</td>
+              <td class="center">${sc[9] !== undefined ? sc[9] + '%' : '0%'}</td>
+              <td class="center">${sc[10] !== undefined ? sc[10] + '%' : '0%'}</td>
+              <td class="center">${sc[11] !== undefined ? sc[11] + '%' : '0%'}</td>
+              <td class="center">${sc[12] !== undefined ? sc[12] + '%' : '0%'}</td>
+              <td class="center">${sc[13] !== undefined ? sc[13] + '%' : '0%'}</td>
+            </tr>
+          `;
+        }).join('')}
       </tbody>
     </table>
   `;
 
-  window.downloadExcelFromHtml('avance_13_actividades_constructivas', 'Actividades', html);
+  window.downloadExcelFromHtml('avance_13_actividades_filtradas', 'Actividades', html);
 };
 
 window.renderProgressBarsReportToCanvas = function (canvas, fase1Muns, fase2Muns, totF1Term, totF1Total, pctF1Global, totF2Term, totF2Total, pctF2Global) {
@@ -4901,7 +5477,12 @@ window.onReportFilterChange = function () {
       if (!b.fecha_visita) {
         matchFecha = false;
       } else {
-        const vDate = b.fecha_visita.split('T')[0];
+        let vDate = '';
+        if (b.fecha_visita instanceof Date) {
+          vDate = b.fecha_visita.toISOString().slice(0, 10);
+        } else {
+          vDate = String(b.fecha_visita).trim().split('T')[0].split(' ')[0];
+        }
         if (fDesde && vDate < fDesde) matchFecha = false;
         if (fHasta && vDate > fHasta) matchFecha = false;
       }
@@ -5335,8 +5916,10 @@ function renderVeredasMunicipioChart(preselectedMun = null) {
 
   const selectedMun = munSelect.value || targetMun;
 
-  // 2. Filtrar beneficiarios del municipio
-  const munBeneficiarios = reportBeneficiariosData.filter((b) => b.municipio === selectedMun);
+  // 2. Filtrar beneficiarios del municipio (respetando filtros activos de fechas, inspector, etc.)
+  const hasFilters = hasActiveReportFilters();
+  const poolData = (hasFilters && reportFilteredData) ? reportFilteredData : reportBeneficiariosData;
+  const munBeneficiarios = poolData.filter((b) => b.municipio === selectedMun);
 
   // 3. Agrupar datos por Vereda
   const veredasMap = {};
@@ -5699,7 +6282,16 @@ window.changeReportPage = function (newPage) {
 };
 
 window.exportReportToCSV = function () {
+  const hasFilters = hasActiveReportFilters();
   let dataset = reportFilteredData;
+
+  // Si hay filtros aplicados pero no hay coincidencias, no exportar todo el universo por error
+  if ((!dataset || dataset.length === 0) && hasFilters) {
+    showToast('⚠️ No se encontraron registros que coincidan con los filtros seleccionados para exportar.', 'warning');
+    return;
+  }
+
+  // Si no hay filtros aplicados, usar la lista completa
   if (!dataset || dataset.length === 0) {
     dataset = reportBeneficiariosData;
   }
@@ -5709,21 +6301,34 @@ window.exportReportToCSV = function () {
     return;
   }
 
+  const filtersSummary = getActiveReportFiltersSummary();
+  const generatedDate = new Date().toLocaleString('es-CO');
+  const totalRecs = dataset.length;
+
   const excelHtml = `
     <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
     <head>
       <meta charset="utf-8">
+      <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
       <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte Baterías</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
       <style>
-        th { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #64748b; padding: 8px; font-family: Calibri, sans-serif; font-size: 11pt; }
-        td { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10.5pt; font-family: Calibri, sans-serif; }
+        body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; }
+        .title { font-size: 16pt; font-weight: bold; color: #065f46; margin-bottom: 4px; }
+        .subtitle { font-size: 10pt; color: #475569; margin-bottom: 12px; }
+        th { background-color: #0f172a; color: #ffffff; font-weight: bold; text-align: center; border: 1px solid #64748b; padding: 8px; font-size: 10.5pt; }
+        td { border: 1px solid #cbd5e1; padding: 6px 10px; font-size: 10pt; }
         .text-center { text-align: center; }
-        .badge-sin { background-color: #f1f5f9; color: #475569; font-weight: bold; }
-        .badge-ejec { background-color: #ffedd5; color: #c2410c; font-weight: bold; }
-        .badge-term { background-color: #dcfce7; color: #15803d; font-weight: bold; }
+        .badge-sin { background-color: #f1f5f9; color: #475569; font-weight: bold; text-align: center; }
+        .badge-ejec { background-color: #ffedd5; color: #c2410c; font-weight: bold; text-align: center; }
+        .badge-term { background-color: #dcfce7; color: #15803d; font-weight: bold; text-align: center; }
       </style>
     </head>
     <body>
+      <div class="title">REPORTE DETALLADO DE BATERÍAS SANITARIAS</div>
+      <div class="subtitle">
+        <strong>Filtros Aplicados:</strong> ${escapeHtml(filtersSummary)}<br>
+        <strong>Total Registros Exportados:</strong> ${totalRecs} | <strong>Fecha Generación:</strong> ${generatedDate}
+      </div>
       <table>
         <thead>
           <tr>
@@ -5775,7 +6380,7 @@ window.exportReportToCSV = function () {
                 <td class="text-center">${escapeHtml(b.fase || '1')}</td>
                 <td>${escapeHtml(b.inspector || 'Sin Asignar')}</td>
                 <td class="text-center" style="font-weight: bold;">${Number(b.avance || 0).toFixed(2)}%</td>
-                <td class="text-center ${estadoClass}">${estadoLabel}</td>
+                <td class="${estadoClass}">${estadoLabel}</td>
                 <td class="text-center">${b.fecha_visita ? new Date(b.fecha_visita).toLocaleString('es-CO') : 'Sin Visita'}</td>
                 <td class="text-center">${scores[1] !== undefined ? scores[1] + '%' : '0%'}</td>
                 <td class="text-center">${scores[6] !== undefined ? scores[6] + '%' : '0%'}</td>
@@ -5799,16 +6404,16 @@ window.exportReportToCSV = function () {
     </html>
   `;
 
-  const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const blob = new Blob(['\uFEFF' + excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Reporte_Baterias_Sanitarias_${new Date().toISOString().slice(0, 10)}.xls`;
+  link.download = `Reporte_Baterias_Filtrado_${new Date().toISOString().slice(0, 10)}.xls`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
-  showToast('✅ Archivo Excel descargado con éxito', 'success');
+  showToast(`📊 Reporte de ${dataset.length} baterías exportado con éxito a Excel.`, 'success');
 };
 
 async function loadAdminDashboard() {
