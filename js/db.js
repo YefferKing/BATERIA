@@ -992,10 +992,12 @@ class DatabaseManager {
               record.avance_global = serverData.avance_global;
               record.estado_bateria = serverData.estado_bateria;
               if (serverData.observaciones !== undefined) record.observaciones = serverData.observaciones;
+              if (serverData.fecha_visita !== undefined) record.fecha_visita = serverData.fecha_visita;
             } else {
               if (updatePayload.avance_global !== undefined) record.avance_global = updatePayload.avance_global;
               if (updatePayload.estado_bateria !== undefined) record.estado_bateria = updatePayload.estado_bateria;
               if (updatePayload.observaciones !== undefined) record.observaciones = updatePayload.observaciones;
+              if (updatePayload.fecha_visita !== undefined) record.fecha_visita = updatePayload.fecha_visita;
             }
             record.sincronizado = updatedOnline ? 1 : 0;
             inspStore.put(record);

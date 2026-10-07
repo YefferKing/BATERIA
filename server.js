@@ -1187,7 +1187,9 @@ app.put('/api/inspecciones/:id', async (req, res) => {
       observaciones,
       avance_global,
       estado_clima,
-      coordenadas_gps
+      coordenadas_gps,
+      fecha_visita,
+      fecha
     } = req.body;
 
     // 1. Validar existencia de la inspección
@@ -1263,11 +1265,25 @@ app.put('/api/inspecciones/:id', async (req, res) => {
     const newGps = coordenadas_gps !== undefined ? (coordenadas_gps ? coordenadas_gps.trim() : null) : currentInsp.coordenadas_gps;
     const newClima = estado_clima !== undefined ? (estado_clima ? estado_clima.trim() : 'Soleado') : currentInsp.estado_clima;
 
+    let newFecha = currentInsp.fecha_visita;
+    const inputFecha = fecha_visita || fecha;
+    if (inputFecha) {
+      const match = String(inputFecha).match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2})?)/);
+      if (match) {
+        newFecha = `${match[1]} ${match[2].length === 5 ? match[2] + ':00' : match[2]}`;
+      } else {
+        const d = new Date(inputFecha);
+        if (!isNaN(d.getTime())) {
+          newFecha = d;
+        }
+      }
+    }
+
     await conn.query(`
       UPDATE inspecciones 
-      SET avance_global = ?, estado_bateria = ?, observaciones = ?, coordenadas_gps = ?, estado_clima = ?
+      SET avance_global = ?, estado_bateria = ?, observaciones = ?, coordenadas_gps = ?, estado_clima = ?, fecha_visita = ?
       WHERE id = ?
-    `, [nuevoAvance, nuevoEstado, newObs, newGps, newClima, inspeccionId]);
+    `, [nuevoAvance, nuevoEstado, newObs, newGps, newClima, newFecha, inspeccionId]);
 
     await conn.commit();
 
@@ -1292,6 +1308,7 @@ app.put('/api/inspecciones/:id', async (req, res) => {
         observaciones: newObs,
         coordenadas_gps: newGps,
         estado_clima: newClima,
+        fecha_visita: newFecha,
         detalles: detallesActualizados
       }
     });

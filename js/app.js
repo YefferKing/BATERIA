@@ -2010,7 +2010,25 @@ window.openEditInspectionModal = async function (inspeccionId) {
     document.getElementById('edit-insp-ubicacion').textContent = `🏛️ ${insp.municipio || ''} - 🌲 ${insp.vereda || ''}`;
     document.getElementById('edit-insp-fase').textContent = `Fase ${insp.fase || '1'}`;
     document.getElementById('edit-insp-inspector').textContent = `👷 ${insp.inspector_nombre || 'Inspector'}`;
-    document.getElementById('edit-insp-fecha').textContent = insp.fecha_visita ? new Date(insp.fecha_visita).toLocaleString('es-CO') : 'Sin fecha';
+    
+    // Cargar fecha en el input editable y en el texto
+    const fechaInput = document.getElementById('edit-insp-fecha-input');
+    const fechaText = document.getElementById('edit-insp-fecha');
+    if (insp.fecha_visita) {
+      const d = new Date(insp.fecha_visita);
+      if (!isNaN(d.getTime())) {
+        const pad = (n) => String(n).padStart(2, '0');
+        const formattedLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        if (fechaInput) fechaInput.value = formattedLocal;
+        if (fechaText) fechaText.textContent = `Registrada: ${d.toLocaleString('es-CO')}`;
+      } else {
+        if (fechaInput) fechaInput.value = '';
+        if (fechaText) fechaText.textContent = 'Sin fecha';
+      }
+    } else {
+      if (fechaInput) fechaInput.value = '';
+      if (fechaText) fechaText.textContent = 'Sin fecha';
+    }
 
     const originalPct = parseFloat(insp.avance_global) || 0;
     document.getElementById('edit-insp-pct-original').textContent = `${originalPct.toFixed(2)}%`;
@@ -2190,15 +2208,19 @@ window.saveEditInspectionProgress = async function () {
     else if (globalPct > 0) globalStatus = 'EN_EJECUCION';
 
     const obsVal = document.getElementById('edit-insp-observaciones-input')?.value.trim() || '';
+    const fechaVal = document.getElementById('edit-insp-fecha-input')?.value || null;
 
     const payload = {
       detalles: detallesPayload,
       avance_global: globalPct,
       estado_bateria: globalStatus,
-      observaciones: obsVal
+      observaciones: obsVal,
+      fecha_visita: fechaVal
     };
 
     const result = await window.dbManager.updateInspeccion(currentEditingInspection.id, payload);
+
+    const updatedFecha = result?.data?.fecha_visita || (fechaVal ? new Date(fechaVal).toISOString() : currentEditingInspection.fecha_visita);
 
     // Actualizar inspeccionesAdminData local
     const foundIdx = inspeccionesAdminData.findIndex((i) => i.id == currentEditingInspection.id);
@@ -2206,6 +2228,7 @@ window.saveEditInspectionProgress = async function () {
       inspeccionesAdminData[foundIdx].avance_global = globalPct;
       inspeccionesAdminData[foundIdx].estado_bateria = globalStatus;
       inspeccionesAdminData[foundIdx].observaciones = obsVal;
+      inspeccionesAdminData[foundIdx].fecha_visita = updatedFecha;
       inspeccionesAdminData[foundIdx].detalles = result.data?.detalles || detallesPayload;
     }
 
@@ -2214,6 +2237,7 @@ window.saveEditInspectionProgress = async function () {
       inspeccionesAdminFiltered[filteredIdx].avance_global = globalPct;
       inspeccionesAdminFiltered[filteredIdx].estado_bateria = globalStatus;
       inspeccionesAdminFiltered[filteredIdx].observaciones = obsVal;
+      inspeccionesAdminFiltered[filteredIdx].fecha_visita = updatedFecha;
       inspeccionesAdminFiltered[filteredIdx].detalles = result.data?.detalles || detallesPayload;
     }
 
@@ -2222,6 +2246,7 @@ window.saveEditInspectionProgress = async function () {
       currentFichaData.avance_global = globalPct;
       currentFichaData.estado_bateria = globalStatus;
       currentFichaData.observaciones = obsVal;
+      currentFichaData.fecha_visita = updatedFecha;
       currentFichaData.detalles = result.data?.detalles || detallesPayload;
       if (window.cambiarTipoFicha) window.cambiarTipoFicha(currentFichaTipo || 'obra');
     }
@@ -2230,7 +2255,12 @@ window.saveEditInspectionProgress = async function () {
       activeInspectionDetailData.avance_global = globalPct;
       activeInspectionDetailData.estado_bateria = globalStatus;
       activeInspectionDetailData.observaciones = obsVal;
+      activeInspectionDetailData.fecha_visita = updatedFecha;
       activeInspectionDetailData.detalles = result.data?.detalles || detallesPayload;
+      const detailFechaEl = document.getElementById('admin-detail-fecha');
+      if (detailFechaEl) {
+        detailFechaEl.textContent = new Date(updatedFecha).toLocaleString('es-CO', { dateStyle: 'full', timeStyle: 'medium' });
+      }
     }
 
     // Refrescar vistas
