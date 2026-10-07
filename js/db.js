@@ -257,6 +257,11 @@ class DatabaseManager {
    * 1. Si hay red (Online): Consulta directo a MySQL y actualiza la copia en IndexedDB.
    * 2. Si no hay red (Offline): Consulta de inmediato la base de datos interna IndexedDB.
    */
+  // Alias de compatibilidad
+  async getUsers() {
+    return this.getAllUsers();
+  }
+
   async getAllUsers() {
     if (navigator.onLine) {
       try {

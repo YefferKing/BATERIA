@@ -1535,7 +1535,7 @@ async function loadInspeccionesAdminPage() {
     inspeccionesAdminFiltered = [...list];
 
     // Cargar opciones en filtros
-    populateInspeccionesFilters();
+    await populateInspeccionesFilters();
 
     // Actualizar tarjetas de métricas
     updateInspeccionesMetrics();
@@ -1570,27 +1570,57 @@ function updateInspeccionesMetrics() {
 }
 
 async function populateInspeccionesFilters() {
-  if (!municipiosData || municipiosData.length === 0) {
-    municipiosData = await window.dbManager.getMunicipios();
-  }
+  try {
+    if (!municipiosData || municipiosData.length === 0) {
+      municipiosData = await window.dbManager.getMunicipios();
+    }
 
-  const munSelect = document.getElementById('filter-insp-municipio');
-  if (munSelect) {
-    const currentVal = munSelect.value;
-    munSelect.innerHTML = `<option value="">🏛️ Todos los Municipios</option>` +
-      municipiosData.map((m) => `<option value="${m.nombre}" ${currentVal === m.nombre ? 'selected' : ''}>${m.nombre}</option>`).join('');
-  }
+    const munSelect = document.getElementById('filter-insp-municipio');
+    if (munSelect) {
+      const currentVal = munSelect.value;
+      munSelect.innerHTML = `<option value="">🏛️ Todos los Municipios</option>` +
+        municipiosData.map((m) => `<option value="${m.nombre}" ${currentVal === m.nombre ? 'selected' : ''}>${m.nombre}</option>`).join('');
+    }
 
-  let users = inspectorsData;
-  if (!users || users.length === 0) {
-    users = await window.dbManager.getUsers();
-  }
+    let users = inspectorsData;
+    if (!users || users.length === 0) {
+      try {
+        users = await window.dbManager.getAllUsers();
+        inspectorsData = users || [];
+      } catch (err) {
+        console.warn('No se pudieron obtener usuarios:', err);
+        users = [];
+      }
+    }
 
-  const inspSelect = document.getElementById('filter-insp-inspector');
-  if (inspSelect) {
-    const currentVal = inspSelect.value;
-    inspSelect.innerHTML = `<option value="">👷 Todos los Inspectores</option>` +
-      users.map((u) => `<option value="${u.nombre}" ${currentVal === u.nombre ? 'selected' : ''}>${u.nombre}</option>`).join('');
+    // Reunir nombres únicos de inspectores tanto de usuarios registrados como de las visitas cargadas
+    const inspectorNamesSet = new Set();
+    if (Array.isArray(users)) {
+      users.forEach((u) => {
+        if (u.nombre && u.nombre.trim()) {
+          inspectorNamesSet.add(u.nombre.trim());
+        }
+      });
+    }
+
+    if (Array.isArray(inspeccionesAdminData)) {
+      inspeccionesAdminData.forEach((i) => {
+        if (i.inspector_nombre && i.inspector_nombre.trim() && i.inspector_nombre !== 'Inspector') {
+          inspectorNamesSet.add(i.inspector_nombre.trim());
+        }
+      });
+    }
+
+    const inspectorList = Array.from(inspectorNamesSet).sort((a, b) => a.localeCompare(b, 'es'));
+
+    const inspSelect = document.getElementById('filter-insp-inspector');
+    if (inspSelect) {
+      const currentVal = inspSelect.value;
+      inspSelect.innerHTML = `<option value="">👷 Todos los Inspectores</option>` +
+        inspectorList.map((nombre) => `<option value="${nombre}" ${currentVal === nombre ? 'selected' : ''}>${nombre}</option>`).join('');
+    }
+  } catch (e) {
+    console.error('Error al popular filtros de inspecciones:', e);
   }
 }
 
