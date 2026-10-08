@@ -6966,9 +6966,19 @@ window.renderInspActivityView = function () {
   const topInspEl = document.getElementById('insp-act-top-inspector');
   if (topInspEl) {
     if (topInspector && topInspector.total_visitas_periodo > 0) {
-      topInspEl.innerHTML = `🏆 ${escapeHtml(topInspector.nombre)} <span style="color: var(--primary); font-size: 0.8rem;">(${topInspector.total_visitas_periodo} vis.)</span>`;
+      topInspEl.title = `${topInspector.nombre} (${topInspector.total_visitas_periodo} visitas)`;
+      topInspEl.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 2px;">
+          <div style="font-size: 1.35rem; font-weight: 800; color: var(--primary); line-height: 1.1;">
+            ${topInspector.total_visitas_periodo} <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">visitas</span>
+          </div>
+          <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;" title="${escapeHtml(topInspector.nombre)}">
+            🏆 ${escapeHtml(topInspector.nombre)}
+          </div>
+        </div>
+      `;
     } else {
-      topInspEl.textContent = 'Sin actividad en el período';
+      topInspEl.innerHTML = '<span style="font-size: 0.88rem; color: var(--text-muted); font-weight: 500;">Sin actividad</span>';
     }
   }
 
