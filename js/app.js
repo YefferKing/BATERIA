@@ -2596,23 +2596,11 @@ window.cambiarTipoFicha = function (tipo) {
         </div>
         <div style="border: 1.2px solid #829470; border-radius: 8px; padding: 8px 10px; margin-top: -1px; background: #ffffff;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="display: flex; align-items: center; gap: 5px;">
-                <div style="width: 14px; height: 14px; background: #3a4b24; color: #ffffff; border-radius: 3px; font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
-                <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase;">VISTA GENERAL</div>
-              </div>
-              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
-                ${foto1Html}
-              </div>
+            <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 215px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
+              ${foto1Html}
             </div>
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="display: flex; align-items: center; gap: 5px;">
-                <div style="width: 14px; height: 14px; background: #3a4b24; color: #ffffff; border-radius: 3px; font-size: 8px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</div>
-                <div style="font-size: 8px; font-weight: 800; color: #1e293b; text-transform: uppercase;">EXCAVACIÓN</div>
-              </div>
-              <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
-                ${foto2Html}
-              </div>
+            <div style="border: 1.2px dashed #9fb08e; border-radius: 6px; height: 215px; display: flex; align-items: center; justify-content: center; background: #fdfdfd; overflow: hidden;">
+              ${foto2Html}
             </div>
           </div>
         </div>
@@ -2870,24 +2858,12 @@ window.cambiarTipoFicha = function (tipo) {
         <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; padding: 6px 8px; margin-top: -1px; background: #ffffff;">
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <!-- Foto 1 Interventoría (Evidencia 3) -->
-            <div style="display: flex; flex-direction: column; gap: 3px;">
-              <div style="display: inline-flex; align-items: center; gap: 4px;">
-                <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">1</div>
-                <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Vista General</div>
-              </div>
-              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
-                ${foto3Html}
-              </div>
+            <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 215px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
+              ${foto3Html}
             </div>
             <!-- Foto 2 Interventoría (Evidencia 4) -->
-            <div style="display: flex; flex-direction: column; gap: 3px;">
-              <div style="display: inline-flex; align-items: center; gap: 4px;">
-                <div style="width: 14px; height: 14px; background: #0f3b7a; color: #ffffff; border-radius: 50%; font-size: 7.5px; font-weight: 900; display: flex; align-items: center; justify-content: center;">2</div>
-                <div style="border: 1px solid #0f3b7a; border-radius: 4px; padding: 1px 6px; font-size: 7.2px; font-weight: 800; color: #0f3b7a; text-transform: capitalize;">Excavación</div>
-              </div>
-              <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 210px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
-                ${foto4Html}
-              </div>
+            <div style="border: 1.2px solid #0f3b7a; border-radius: 6px; height: 215px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden;">
+              ${foto4Html}
             </div>
           </div>
         </div>
